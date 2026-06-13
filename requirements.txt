@@ -1,0 +1,5 @@
+google-genai
+colorama
+prompt_toolkit
+python-docx
+python-dotenv

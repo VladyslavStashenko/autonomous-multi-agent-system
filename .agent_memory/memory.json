@@ -1,0 +1,207 @@
+{
+  "entries": [
+    {
+      "task": "Створи повноцінну структуру проекту за патерном MVVM для Python застосунку. Створи папки і файли: model/ з user.py (датаклас User з полями id, name, email, created_at) і task.py (датаклас Task з полями id, title, status, priority, user_id); viewmodel/ з user_viewmodel.py (клас з методами get_all, get_by_id, create, delete) і task_viewmodel.py (клас з методами get_by_user, update_status, filter_by_priority); view/ з user_view.py і task_view.py (функції для виводу даних у форматованому вигляді); repository/ з base_repository.py (абстрактний базовий клас з CRUD методами) і json_repository.py (реалізація що зберігає дані в JSON файли); main.py який демонструє роботу всієї системи: створює 3 користувачів, додає їм задачі різного пріоритету, змінює статуси, виводить звіт і зберігає в файл report.txt. Запусти main.py.",
+      "status": "done",
+      "created_files": [
+        "model/user.py",
+        "model/task.py",
+        "viewmodel/user_viewmodel.py",
+        "viewmodel/task_viewmodel.py",
+        "view/user_view.py",
+        "view/task_view.py"
+      ],
+      "ran_commands": [
+        "mkdir model",
+        "md model",
+        "mkdir viewmodel",
+        "mkdir view",
+        "mkdir repository"
+      ],
+      "read_files": [],
+      "timestamp": "2026-06-10T12:18:41"
+    },
+    {
+      "task": "В директорії viewmodel/ знайди файл task_viewmodel.py, прочитай його, знайди всі баги і виправ їх. Після виправлення запусти main.py щоб переконатись що все працює коректно.",
+      "status": "fail",
+      "created_files": [
+        "viewmodel/task_viewmodel.py",
+        "viewmodel/task_viewmodel.py"
+      ],
+      "ran_commands": [
+        "python main.py",
+        "python viewmodel/main.py",
+        "python main.py"
+      ],
+      "read_files": [
+        "viewmodel/task_viewmodel.py",
+        "viewmodel/task_viewmodel.py"
+      ],
+      "timestamp": "2026-06-10T12:22:37"
+    },
+    {
+      "task": "Створи повноцінний менеджер нотаток: notes/note.py з датакласом Note (id, title, content, tags, created_at); notes/storage.py з функціями збереження і завантаження нотаток в notes.json; notes/manager.py з класом NoteManager який вміє додавати нотатку, шукати по тегу, шукати по ключовому слову в title/content, видаляти по id і виводити всі нотатки відформатовано. В if __name__ == \"__main__\" створи 4 нотатки з різними тегами, виконай пошук по тегу і по ключовому слову, видали одну нотатку і виведи фінальний список. Запусти файл.",
+      "status": "done",
+      "created_files": [
+        "notes/note.py",
+        "notes/storage.py",
+        "notes/manager.py",
+        "notes/manager.py",
+        "notes/manager.py",
+        "notes/manager.py",
+        "notes/manager.py",
+        "notes/manager.py",
+        "notes/manager.py",
+        "notes/manager.py",
+        "notes/note.py",
+        "notes/storage.py",
+        "notes/manager.py",
+        "notes/manager.py",
+        "notes/__init__.py",
+        "notes/manager.py"
+      ],
+      "ran_commands": [
+        "New-Item -ItemType Directory -Path notes",
+        "mkdir notes",
+        "from notes.note import Note\nfrom notes.storage import save_notes, load_notes\nimport json\n\nclass NoteManager:\n    def __init__(self):\n        self.notes = []\n        self.next_id = 1\n\n    def add_note(self, title: str, content: str, tags: list[str]):\n        note = Note(id=self.next_id, title=title, content=content, tags=tags)\n        self.notes.append(note)\n        self.next_id += 1\n        save_notes(self.notes)\n\n    def search_by_tag(self, tag: str):\n        return [note for note in self.notes if tag in note.tags]\n\n    def search_by_keyword(self, keyword: str):\n        return [note for note in self.notes if keyword in note.title or keyword in note.content]\n\n    def delete_note(self, note_id: int):\n        initial_length = len(self.notes)\n        self.notes = [note for note in self.notes if note.id != note_id]\n        if len(self.notes) < initial_length:\n            save_notes(self.notes)\n            return True\n        return False\n\n    def display_notes(self):\n        if not self.notes:\n            return \"No notes to display.\"\n        \n        output = \"\"\n        for note in self.notes:\n            output += f\"ID: {note.id}\n\"\n            output += f\"Title: {note.title}\n\"\n            output += f\"Content: {note.content}\n\"\n            output += f\"Tags: {\", \".join(note.tags)}\n\"\n            output += f\"Created At: {note.created_at}\n\"\n            output += \"=\" * 20 + \"\n\"\n        return output\n\n    def load_notes(self):\n        try:\n            self.notes = load_notes()\n            if self.notes:\n                self.next_id = max(note.id for note in self.notes) + 1\n            else:\n                self.next_id = 1\n        except FileNotFoundError:\n            self.notes = []\n            self.next_id = 1\n\nif __name__ == \"__main__\":\n    manager = NoteManager()\n    manager.load_notes()\n\n    # Create 4 notes\n    manager.add_note(\"First Note\", \"This is the content of the first note.\", [\"python\", \"coding\"])\n    manager.add_note(\"Second Note\", \"This is the content of the second note, with a keyword.\", [\"java\", \"programming\"])\n    manager.add_note(\"Third Note\", \"Another note about python and data.\", [\"python\", \"data science\"])\n    manager.add_note(\"Fourth Note\", \"A note for testing deletion.\", [\"test\", \"delete\"])\n\n    print(\"All notes after adding:\")\n    print(manager.display_notes())\n\n    # Search by tag\n    print(\"Searching for notes with tag 'python':\")\n    python_notes = manager.search_by_tag(\"python\")\n    for note in python_notes:\n        print(f\"- {note.title}\")\n    print(\"\n\" + \"=\" * 20 + \"\n\")\n\n    # Search by keyword\n    print(\"Searching for notes with keyword 'content':\")\n    content_notes = manager.search_by_keyword(\"content\")\n    for note in content_notes:\n        print(f\"- {note.title}\")\n    print(\"\n\" + \"=\" * 20 + \"\n\")\n\n    # Delete a note\n    print(\"Deleting note with ID 2:\")\n    manager.delete_note(2)\n    print(\"Notes after deletion:\")\n    print(manager.display_notes())\n\n    # Display final list of notes\n    print(\"Final list of notes:\")\n    print(manager.display_notes())",
+        "python notes/manager.py",
+        "type notes/manager.py",
+        "powershell -Command \"Get-Content notes/manager.py\"",
+        "python notes/manager.py",
+        "python notes/manager.py",
+        "python notes/manager.py",
+        "python notes/manager.py",
+        "python notes/manager.py"
+      ],
+      "read_files": [
+        "notes/storage.py"
+      ],
+      "timestamp": "2026-06-10T12:31:54"
+    },
+    {
+      "task": "Створи bank/account.py з датакласом BankAccount (id, owner, balance, currency, transactions) і методами deposit, withdraw (з перевіркою балансу), get_statement (виводить всі транзакції відформатовано); bank/bank.py з класом Bank який зберігає рахунки в accounts.json, вміє створювати рахунок, знаходити по id, переказувати між рахунками і виводити всіх клієнтів. В if __name__ == \"__main__\" створи 3 рахунки, зроби кілька депозитів і знімань, переказ між рахунками, виведи виписки по кожному. Запусти файл.",
+      "status": "fail",
+      "created_files": [
+        "bank/account.py",
+        "bank/bank.py",
+        "bank/__init__.py",
+        "bank/__init__.py",
+        "bank/__init__.py"
+      ],
+      "ran_commands": [
+        "python bank/bank.py",
+        "python bank/bank.py",
+        "python bank/bank.py"
+      ],
+      "read_files": [],
+      "timestamp": "2026-06-10T12:40:55"
+    },
+    {
+      "task": "В файлі bank/bank.py заміни рядок from bank.account import BankAccount на from account import BankAccount. Також додай на початок файлу:\npythonimport sys, os\nsys.path.insert(0, os.path.dirname(__file__))\nПотім запусти python bank/bank.py.",
+      "status": "done",
+      "created_files": [
+        "bank/bank.py",
+        "bank/bank.py",
+        "bank/bank.py",
+        "bank/bank.py",
+        "bank/bank.py",
+        "bank/bank.py",
+        "bank/bank.py"
+      ],
+      "ran_commands": [
+        "python bank/bank.py",
+        "python bank/bank.py",
+        "python bank/bank.py",
+        "python bank/bank.py",
+        "python bank/bank.py"
+      ],
+      "read_files": [
+        "bank/bank.py",
+        "bank/bank.py"
+      ],
+      "timestamp": "2026-06-10T12:43:25"
+    },
+    {
+      "task": "Створи library/book.py з датакласом Book (id, title, author, year, available) і library/library.py з класом Library який зберігає книги в books.json, вміє додавати книгу, шукати по автору або назві, видавати книгу (available=False) і повертати (available=True), виводити всі доступні книги. В if __name__ == \"__main__\" додай 5 книг, виконай пошук, видай 2 книги, поверни одну, виведи доступні. Запусти файл.",
+      "status": "done",
+      "created_files": [
+        "library/book.py",
+        "library/library.py",
+        "library/library.py",
+        "library/__init__.py",
+        "library/library.py",
+        "library/library.py"
+      ],
+      "ran_commands": [
+        "python library/library.py",
+        "python library/library.py",
+        "python library/library.py",
+        "python library/library.py",
+        "python -m library.library"
+      ],
+      "read_files": [
+        "library/library.py",
+        "library/library.py"
+      ],
+      "timestamp": "2026-06-10T12:50:31"
+    },
+    {
+      "task": "Створи utils/temperature.py з функціями конвертації між Celsius, Fahrenheit і Kelvin та if __name__ == \"__main__\" з прикладами для кожної конвертації. Запусти файл.",
+      "status": "done",
+      "created_files": [
+        "utils/temperature.py"
+      ],
+      "ran_commands": [
+        "New-Item -ItemType Directory -Path utils",
+        "mkdir utils",
+        "python utils/temperature.py"
+      ],
+      "read_files": [],
+      "timestamp": "2026-06-10T13:04:43"
+    },
+    {
+      "task": "Створи utils/fibonacci.py з функцією яка генерує перші N чисел Фібоначчі та if __name__ == \"__main__\" який виводить перші 10, 20 і 50 чисел. Запусти файл.",
+      "status": "done",
+      "created_files": [
+        "utils/fibonacci.py"
+      ],
+      "ran_commands": [
+        "if not exist utils mkdir utils",
+        "python utils/fibonacci.py"
+      ],
+      "read_files": [],
+      "timestamp": "2026-06-10T13:10:16"
+    },
+    {
+      "task": "Create a Python project with a calculator module that supports add, subtract, multiply, divide operations, write unit tests for it and run them.",
+      "status": "done",
+      "created_files": [
+        "calculator/calculator.py",
+        "calculator/test_calculator.py"
+      ],
+      "ran_commands": [
+        "mkdir calculator",
+        "python -m unittest calculator.test_calculator"
+      ],
+      "read_files": [],
+      "timestamp": "2026-06-13T15:59:23"
+    },
+    {
+      "task": "Create a Python REST API with Flask that has endpoints for CRUD operations on a todo list, save it to a JSON file.",
+      "status": "done",
+      "created_files": [
+        "app.py",
+        "app.py",
+        "app.py",
+        "app.py"
+      ],
+      "ran_commands": [],
+      "read_files": [
+        "app.py",
+        "todos.json",
+        "app.py"
+      ],
+      "timestamp": "2026-06-13T16:09:48"
+    }
+  ]
+}

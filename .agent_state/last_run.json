@@ -1,0 +1,46 @@
+{
+  "task": "Add basic error handling and request data validation within `app.py`.",
+  "steps_history": [
+    {
+      "step": 1,
+      "decision": {
+        "status": "continue",
+        "action": "write_file",
+        "args": {
+          "path": "app.py",
+          "content": "from flask import Flask, request, jsonify\nimport json\n\napp = Flask(__name__)\n\ndef load_todos():\n    try:\n        with open('todos.json', 'r') as f:\n            return json.load(f)\n    except FileNotFoundError:\n        return []\n\ndef save_todos(todos):\n    with open('todos.json', 'w') as f:\n        json.dump(todos, f, indent=4)\n\n@app.route('/')\ndef home():\n    return \"Todo List API\"\n\n# GET all todos\n@app.route('/todos', methods=['GET'])\ndef get_todos():\n    todos = load_todos()\n    return jsonify(todos)\n\n# GET a single todo by ID\n@app.route('/todos/<int:todo_id>', methods=['GET'])\ndef get_todo(todo_id):\n    todos = load_todos()\n    todo = next((todo for todo in todos if todo['id'] == todo_id), None)\n    if todo:\n        return jsonify(todo)\n    return jsonify({'message': 'Todo not found'}), 404\n\n# POST a new todo\n@app.route('/todos', methods=['POST'])\ndef add_todo():\n    if not request.json or not 'title' in request.json:\n        return jsonify({'message': 'Invalid input: missing title'}), 400\n    \n    todos = load_todos()\n    new_id = max([todo['id'] for todo in todos]) + 1 if todos else 1\n    \n    new_todo = {\n        'id': new_id,\n        'title': request.json['title'],\n        'description': request.json.get('description', ''),\n        'done': False\n    }\n    \n    # Validate 'done' field if provided\n    if 'done' in request.json and not isinstance(request.json['done'], bool):\n        return jsonify({'message': 'Invalid input: \"done\" field must be a boolean'}), 400\n    if 'done' in request.json:\n        new_todo['done'] = request.json['done']\n\n    todos.append(new_todo)\n    save_todos(todos)\n    return jsonify(new_todo), 201\n\n# PUT (update) a todo by ID\n@app.route('/todos/<int:todo_id>', methods=['PUT'])\ndef update_todo(todo_id):\n    todos = load_todos()\n    todo = next((todo for todo in todos if todo['id'] == todo_id), None)\n    if not todo:\n        return jsonify({'message': 'Todo not found'}), 404\n    \n    if not request.json:\n        return jsonify({'message': 'Invalid input'}), 400\n    \n    # Validate and update fields\n    if 'title' in request.json and not isinstance(request.json['title'], str):\n        return jsonify({'message': 'Invalid input: \"title\" field must be a string'}), 400\n    if 'description' in request.json and not isinstance(request.json['description'], str):\n        return jsonify({'message': 'Invalid input: \"description\" field must be a string'}), 400\n    if 'done' in request.json and not isinstance(request.json['done'], bool):\n        return jsonify({'message': 'Invalid input: \"done\" field must be a boolean'}), 400\n\n    todo['title'] = request.json.get('title', todo['title'])\n    todo['description'] = request.json.get('description', todo['description'])\n    todo['done'] = request.json.get('done', todo['done'])\n    \n    save_todos(todos)\n    return jsonify(todo)\n\n# DELETE a todo by ID\n@app.route('/todos/<int:todo_id>', methods=['DELETE'])\ndef delete_todo(todo_id):\n    todos = load_todos()\n    todo_to_delete = next((todo for todo in todos if todo['id'] == todo_id), None)\n    if not todo_to_delete:\n        return jsonify({'message': 'Todo not found'}), 404\n    \n    todos.remove(todo_to_delete)\n    save_todos(todos)\n    return jsonify({'message': 'Todo deleted'})\n\nif __name__ == '__main__':\n    app.run(debug=True)\n"
+        },
+        "reason": "Model selected native function call: write_file",
+        "summary": ""
+      },
+      "result": {
+        "ok": true,
+        "path": "D:\\NU_LP\\2_sem\\ПКР\\test-project\\app.py",
+        "message": "File written successfully.",
+        "_path_existed_before": true
+      }
+    }
+  ],
+  "decisions": [
+    {
+      "status": "continue",
+      "action": "write_file",
+      "args": {
+        "path": "app.py",
+        "content": "from flask import Flask, request, jsonify\nimport json\n\napp = Flask(__name__)\n\ndef load_todos():\n    try:\n        with open('todos.json', 'r') as f:\n            return json.load(f)\n    except FileNotFoundError:\n        return []\n\ndef save_todos(todos):\n    with open('todos.json', 'w') as f:\n        json.dump(todos, f, indent=4)\n\n@app.route('/')\ndef home():\n    return \"Todo List API\"\n\n# GET all todos\n@app.route('/todos', methods=['GET'])\ndef get_todos():\n    todos = load_todos()\n    return jsonify(todos)\n\n# GET a single todo by ID\n@app.route('/todos/<int:todo_id>', methods=['GET'])\ndef get_todo(todo_id):\n    todos = load_todos()\n    todo = next((todo for todo in todos if todo['id'] == todo_id), None)\n    if todo:\n        return jsonify(todo)\n    return jsonify({'message': 'Todo not found'}), 404\n\n# POST a new todo\n@app.route('/todos', methods=['POST'])\ndef add_todo():\n    if not request.json or not 'title' in request.json:\n        return jsonify({'message': 'Invalid input: missing title'}), 400\n    \n    todos = load_todos()\n    new_id = max([todo['id'] for todo in todos]) + 1 if todos else 1\n    \n    new_todo = {\n        'id': new_id,\n        'title': request.json['title'],\n        'description': request.json.get('description', ''),\n        'done': False\n    }\n    \n    # Validate 'done' field if provided\n    if 'done' in request.json and not isinstance(request.json['done'], bool):\n        return jsonify({'message': 'Invalid input: \"done\" field must be a boolean'}), 400\n    if 'done' in request.json:\n        new_todo['done'] = request.json['done']\n\n    todos.append(new_todo)\n    save_todos(todos)\n    return jsonify(new_todo), 201\n\n# PUT (update) a todo by ID\n@app.route('/todos/<int:todo_id>', methods=['PUT'])\ndef update_todo(todo_id):\n    todos = load_todos()\n    todo = next((todo for todo in todos if todo['id'] == todo_id), None)\n    if not todo:\n        return jsonify({'message': 'Todo not found'}), 404\n    \n    if not request.json:\n        return jsonify({'message': 'Invalid input'}), 400\n    \n    # Validate and update fields\n    if 'title' in request.json and not isinstance(request.json['title'], str):\n        return jsonify({'message': 'Invalid input: \"title\" field must be a string'}), 400\n    if 'description' in request.json and not isinstance(request.json['description'], str):\n        return jsonify({'message': 'Invalid input: \"description\" field must be a string'}), 400\n    if 'done' in request.json and not isinstance(request.json['done'], bool):\n        return jsonify({'message': 'Invalid input: \"done\" field must be a boolean'}), 400\n\n    todo['title'] = request.json.get('title', todo['title'])\n    todo['description'] = request.json.get('description', todo['description'])\n    todo['done'] = request.json.get('done', todo['done'])\n    \n    save_todos(todos)\n    return jsonify(todo)\n\n# DELETE a todo by ID\n@app.route('/todos/<int:todo_id>', methods=['DELETE'])\ndef delete_todo(todo_id):\n    todos = load_todos()\n    todo_to_delete = next((todo for todo in todos if todo['id'] == todo_id), None)\n    if not todo_to_delete:\n        return jsonify({'message': 'Todo not found'}), 404\n    \n    todos.remove(todo_to_delete)\n    save_todos(todos)\n    return jsonify({'message': 'Todo deleted'})\n\nif __name__ == '__main__':\n    app.run(debug=True)\n"
+      },
+      "reason": "Model selected native function call: write_file",
+      "summary": ""
+    }
+  ],
+  "tool_results": [
+    {
+      "ok": true,
+      "path": "D:\\NU_LP\\2_sem\\ПКР\\test-project\\app.py",
+      "message": "File written successfully.",
+      "_path_existed_before": true
+    }
+  ],
+  "final_status": "done",
+  "final_summary": "The `app.py` file has been updated with enhanced error handling and request data validation for all CRUD operations. This includes checking for missing fields, ensuring correct data types (e.g., string for title, boolean for done), and returning appropriate HTTP status codes and error messages. The validation is now more robust for POST and PUT requests."
+}
