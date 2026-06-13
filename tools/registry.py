@@ -3,6 +3,7 @@ from __future__ import annotations
 from google.genai import types
 
 from tools.filesystem import (
+    apply_patch,
     append_file,
     delete_directory,
     list_directory,
@@ -16,6 +17,7 @@ from tools.filesystem import (
 
 TOOL_REGISTRY = {
     "write_file": write_file,
+    "apply_patch": apply_patch,
     "append_file": append_file,
     "read_file": read_file,
     "run_command": run_command,
@@ -48,6 +50,31 @@ TOOL_SCHEMAS = {
             "content": types.Schema(type="STRING", description="Full UTF-8 text content to write."),
         },
         required=["path", "content"],
+    ),
+    "apply_patch": types.Schema(
+        type="OBJECT",
+        properties={
+            "path": types.Schema(type="STRING", description="Relative path to an existing text file inside the project."),
+            "patches": types.Schema(
+                type="ARRAY",
+                items=types.Schema(
+                    type="OBJECT",
+                    properties={
+                        "old_text": types.Schema(
+                            type="STRING",
+                            description="Exact existing text block to replace. It must match exactly once in the file.",
+                        ),
+                        "new_text": types.Schema(
+                            type="STRING",
+                            description="Replacement text block for the matched old_text.",
+                        ),
+                    },
+                    required=["old_text", "new_text"],
+                ),
+                description="Ordered list of exact-match text replacements to apply to the file.",
+            ),
+        },
+        required=["path", "patches"],
     ),
     "list_directory": types.Schema(
         type="OBJECT",
@@ -93,6 +120,7 @@ def get_available_tools_description() -> str:
         [
             "- read_file(path): Read a UTF-8 text file inside the project.",
             "- write_file(path, content): Create or overwrite a UTF-8 text file inside the project.",
+            "- apply_patch(path, patches): Apply one or more exact text replacements to an existing UTF-8 text file.",
             "- append_file(path, content): Append UTF-8 text content to a file inside the project.",
             "- list_directory(path): List files and folders inside the project.",
             "- delete_directory(path): Recursively delete a directory inside the project, except the project root.",

@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from datetime import datetime
+from difflib import SequenceMatcher
 import math
 from pathlib import Path
 import re
@@ -217,6 +218,17 @@ def format_error(error_message: str) -> str:
     return error_message[:120]
 
 
+def get_changed_line_numbers(old_content: str, new_content: str) -> set[int]:
+    old_lines = old_content.splitlines()
+    new_lines = new_content.splitlines()
+    matcher = SequenceMatcher(None, old_lines, new_lines)
+    changed_lines: set[int] = set()
+    for tag, _i1, _i2, j1, j2 in matcher.get_opcodes():
+        if tag in {"replace", "insert"}:
+            changed_lines.update(range(j1 + 1, j2 + 1))
+    return changed_lines
+
+
 def infer_task_language(task: str) -> str:
     return "uk" if re.search(r"[А-Яа-яІіЇїЄєҐґ]", task) else "en"
 
@@ -288,7 +300,7 @@ def render_chat_step(action: str, args: dict[str, Any], result: dict[str, Any], 
     border_style = theme.ui_success if ok else theme.ui_error
     status_icon = "✓" if ok else "✗"
 
-    def build_syntax_block(content: str, content_path: str) -> Syntax:
+    def build_syntax_block(content: str, content_path: str, changed_lines: set[int] | None = None) -> Syntax:
         try:
             lexer = Syntax.guess_lexer(code=content, path=content_path or None)
         except Exception:
@@ -296,7 +308,18 @@ def render_chat_step(action: str, args: dict[str, Any], result: dict[str, Any], 
         if not lexer and content_path:
             suffix = Path(content_path).suffix.lstrip(".")
             lexer = suffix or "text"
-        return Syntax(content, lexer or "text", word_wrap=True, line_numbers=True)
+        syntax = Syntax(
+            content,
+            lexer or "text",
+            word_wrap=True,
+            line_numbers=True,
+            highlight_lines=changed_lines or None,
+        )
+        content_lines = content.splitlines()
+        for line_number in sorted(changed_lines or ()):
+            if 1 <= line_number <= len(content_lines):
+                syntax.stylize_range("on #1f4d3a", (line_number, 0), (line_number, len(content_lines[line_number - 1]) + 1))
+        return syntax
 
     lines: list[Any] = []
     if path:
@@ -346,9 +369,11 @@ def render_chat_step(action: str, args: dict[str, Any], result: dict[str, Any], 
     if result.get("stderr") and result.get("stderr") != result.get("error"):
         lines.append(Text(str(result["stderr"]), style=theme.ui_error))
 
-    code_or_content = str(result.get("content") or args.get("content") or "").strip()
+    code_or_content = str(result.get("_display_content") or result.get("content") or args.get("content") or "").strip()
+    changed_lines_value = args.get("_changed_lines")
+    changed_lines = {int(line) for line in changed_lines_value} if isinstance(changed_lines_value, list) else None
     if code_or_content:
-        lines.append(build_syntax_block(code_or_content, path))
+        lines.append(build_syntax_block(code_or_content, path, changed_lines))
 
     panel = Panel(
         Group(*lines),
@@ -436,11 +461,28 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
 
     def execute_step_with_context(step: dict[str, Any]) -> dict[str, Any]:
         existed_before = False
-        if step.get("action") == "write_file" and step.get("path"):
-            existed_before = Path(str(step["path"])).exists()
+        previous_content = ""
+        if step.get("action") in {"write_file", "apply_patch"} and step.get("path"):
+            file_path = Path(str(step["path"]))
+            existed_before = file_path.exists()
+            if existed_before:
+                try:
+                    previous_content = file_path.read_text(encoding="utf-8")
+                except OSError:
+                    previous_content = ""
         result = original_execute_step(step)
-        if step.get("action") == "write_file":
-            result = {**result, "_path_existed_before": existed_before}
+        if step.get("action") in {"write_file", "apply_patch"}:
+            new_content = str(result.get("_display_content") or step.get("content") or "")
+            changed_lines = (
+                list(range(1, len(new_content.splitlines()) + 1))
+                if not existed_before
+                else sorted(get_changed_line_numbers(previous_content, new_content))
+            )
+            result = {
+                **result,
+                "_path_existed_before": existed_before,
+                "_changed_lines": changed_lines,
+            }
         return result
 
     worker.execute_step = execute_step_with_context
@@ -452,6 +494,8 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
         args = dict(decision.get("args", {}))
         if "_path_existed_before" in result:
             args["_path_existed_before"] = result["_path_existed_before"]
+        if "_changed_lines" in result:
+            args["_changed_lines"] = result["_changed_lines"]
         if reason:
             args["_reason"] = reason
 
@@ -1184,7 +1228,7 @@ def main() -> None:
                     "If asked who you are — introduce yourself once briefly. "
                     "If asked what you can do — list tools sarcastically without saying your name. "
                     "If asked how you work — explain sarcastically without saying your name. "
-                    "Your actual tools are: read_file, write_file, list_directory, delete_directory, run_command, run_interactive_command, write_docx. "
+                    "Your actual tools are: read_file, write_file, apply_patch, list_directory, delete_directory, run_command, run_interactive_command, write_docx. "
                     "When asked about tools — mention only these, sarcastically. Do not invent other tools. "
                     "Respond in the same language as the user. Be brief, 2-3 sentences max. "
                     f"{memory_context}"

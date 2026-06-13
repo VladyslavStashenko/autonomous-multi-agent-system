@@ -29,6 +29,50 @@ def write_file(path: str, content: str) -> dict[str, Any]:
         return {"ok": False, "error": f"write_file failed: {exc}"}
 
 
+def apply_patch(path: str, patches: list[dict[str, Any]]) -> dict[str, Any]:
+    try:
+        file_path = safe_path(path)
+        if not file_path.exists():
+            return {"ok": False, "error": f"File does not exist: {path}"}
+        content = file_path.read_text(encoding="utf-8")
+        original_content = content
+
+        if not isinstance(patches, list) or not patches:
+            return {"ok": False, "error": "apply_patch requires a non-empty patches list."}
+
+        for index, patch in enumerate(patches, start=1):
+            if not isinstance(patch, dict):
+                return {"ok": False, "error": f"Patch #{index} must be an object."}
+            old_text = str(patch.get("old_text", ""))
+            new_text = str(patch.get("new_text", ""))
+            if not old_text:
+                return {"ok": False, "error": f"Patch #{index} is missing old_text."}
+
+            occurrences = content.count(old_text)
+            if occurrences == 0:
+                return {"ok": False, "error": f"Patch #{index} old_text was not found in {path}."}
+            if occurrences > 1:
+                return {
+                    "ok": False,
+                    "error": (
+                        f"Patch #{index} is ambiguous in {path}: old_text matched {occurrences} times. "
+                        "Provide a larger unique block."
+                    ),
+                }
+
+            content = content.replace(old_text, new_text, 1)
+
+        file_path.write_text(content, encoding="utf-8")
+        return {
+            "ok": True,
+            "path": str(file_path),
+            "message": "Patch applied successfully." if content != original_content else "Patch made no changes.",
+            "_display_content": content,
+        }
+    except Exception as exc:
+        return {"ok": False, "error": f"apply_patch failed: {exc}"}
+
+
 def append_file(path: str, content: str) -> dict[str, Any]:
     try:
         file_path = safe_path(path)

@@ -40,7 +40,7 @@ def save_memory(state: AgentState) -> None:
         action = decision.get("action", "")
         args = decision.get("args", {})
 
-        if action == "write_file":
+        if action in {"write_file", "apply_patch"}:
             path = str(args.get("path", "")).strip()
             if path:
                 created_files.append(path)

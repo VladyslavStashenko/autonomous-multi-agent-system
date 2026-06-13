@@ -47,6 +47,7 @@ class AutonomousAgent:
         descriptions = {
             "read_file": "Read a UTF-8 text file inside the project.",
             "write_file": "Create or overwrite a UTF-8 text file inside the project.",
+            "apply_patch": "Apply one or more exact text replacements to an existing UTF-8 text file.",
             "append_file": "Append UTF-8 text content to a file inside the project.",
             "list_directory": "List files and folders inside the project.",
             "delete_directory": "Recursively delete a directory inside the project, except the project root.",
@@ -85,6 +86,10 @@ class AutonomousAgent:
             "Use list_directory to list files — never run_command for this. "
             "Use read_file to read files — never run_command for this. "
             "Use write_file with full path like 'notes/work.txt' to create files in subdirectories — it creates parent dirs automatically. "
+            "For existing files, read them first and prefer apply_patch for targeted edits. "
+            "Use write_file on an existing file only when you intentionally need to replace the entire file content. "
+            "Use apply_patch for targeted edits to existing files after reading them first. "
+            "For apply_patch, old_text must match the current file content exactly once, so include enough surrounding context to make it unique. "
             "Use run_command only to execute scripts or programs (e.g. python script.py). "
             "Never use Linux/Unix commands: find, grep, ls, cat, wc, touch, mkdir, rm, cp, mv. "
             "run_command on Windows executes through cmd.exe, not PowerShell. "

@@ -19,6 +19,8 @@ class Worker:
                 return tool(step.get("command", ""))
             if action in {"write_file", "append_file", "write_docx"}:
                 return tool(step.get("path", ""), step.get("content", ""))
+            if action == "apply_patch":
+                return tool(step.get("path", ""), step.get("patches", []))
             return {"ok": False, "error": f"Unsupported action signature: {action}"}
         except Exception as exc:
             return {"ok": False, "error": f"Worker execution failed for {action}: {exc}"}

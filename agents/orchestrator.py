@@ -45,7 +45,10 @@ class _CoderAgent(AutonomousAgent):
             "\n\nTOOLS: "
             "Use list_directory to inspect files and folders. "
             "Use read_file to inspect file contents. "
-            "Use write_file with full relative paths when creating or replacing files. "
+            "Use write_file with full relative paths when creating new files or intentionally replacing an entire file. "
+            "For existing files, read them first and prefer apply_patch for targeted edits. "
+            "Use apply_patch for targeted edits to existing files after reading them first. "
+            "For apply_patch, old_text must match the current file content exactly once, so include enough surrounding context to make it unique. "
             "Use run_command only for running scripts or programs. "
             "Before writing tests, always use read_file to inspect the module under test and match class names, method names, function names, and file paths exactly as implemented. "
             "Never invent tool names or arguments. "
@@ -131,7 +134,7 @@ class OrchestratorAgent(AutonomousAgent):
             args = decision.get("args", {})
             action = decision.get("action")
             path = str(args.get("path", "")).strip()
-            if action == "write_file" and path and OrchestratorAgent._is_python_module_path(path):
+            if action in {"write_file", "apply_patch"} and path and OrchestratorAgent._is_python_module_path(path):
                 if path not in module_paths:
                     module_paths.append(path)
         return module_paths
