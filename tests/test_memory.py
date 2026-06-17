@@ -68,10 +68,65 @@ def test_load_memory_reads_saved_entries(
     memory_file = tmp_path / "memory.json"
     monkeypatch.setattr(memory, "MEMORY_FILE", memory_file)
     memory_file.write_text(
-        json.dumps({"entries": [{"task": "loaded", "status": "done"}]}),
+        json.dumps(
+            {
+                "entries": [
+                    {
+                        "task": "loaded",
+                        "status": "done",
+                        "timestamp": "2025-01-01T00:00:00",
+                    }
+                ]
+            }
+        ),
         encoding="utf-8",
     )
 
     payload = memory.load_memory()
 
-    assert payload == {"entries": [{"task": "loaded", "status": "done"}]}
+    assert payload == {
+        "entries": [
+            {
+                "task": "loaded",
+                "status": "done",
+                "created_files": [],
+                "ran_commands": [],
+                "read_files": [],
+                "timestamp": "2025-01-01T00:00:00",
+            }
+        ]
+    }
+
+
+def test_load_memory_skips_invalid_entries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    memory_file = tmp_path / "memory.json"
+    monkeypatch.setattr(memory, "MEMORY_FILE", memory_file)
+    memory_file.write_text(
+        json.dumps(
+            {
+                "entries": [
+                    {"task": "loaded", "status": "done", "timestamp": "2025-01-01T00:00:00"},
+                    {"task": "broken"},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = memory.load_memory()
+
+    assert payload == {
+        "entries": [
+            {
+                "task": "loaded",
+                "status": "done",
+                "created_files": [],
+                "ran_commands": [],
+                "read_files": [],
+                "timestamp": "2025-01-01T00:00:00",
+            }
+        ]
+    }

@@ -69,3 +69,19 @@ def test_evaluate_falls_back_for_invalid_status() -> None:
         "summary": "Completed based on tool results.",
         "retry_step_indexes": [],
     }
+
+
+def test_evaluate_state_falls_back_for_invalid_payload() -> None:
+    evaluator = make_evaluator_with_response("not a json payload")
+    state = SimpleNamespace(
+        task="task",
+        steps_history=[{"result": {"ok": False}}],
+    )
+
+    result = evaluator.evaluate_state(state)
+
+    assert result == {
+        "status": "FAIL",
+        "summary": "Latest step failed.",
+        "retry_step_indexes": [0],
+    }

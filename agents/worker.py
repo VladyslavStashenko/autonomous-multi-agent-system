@@ -3,6 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from pydantic import ValidationError
+
+from schemas.models import WorkerStepInput
 from tools.registry import TOOL_REGISTRY
 
 
@@ -63,25 +66,32 @@ class Worker:
             return {"ok": False, "error": f"Unknown action: {action}"}
 
         try:
-            cache_key = self._cache_key(action, step) if isinstance(action, str) else None
+            validated_step = WorkerStepInput.model_validate(step)
+            step_data = validated_step.model_dump()
+            cache_key = self._cache_key(action, step_data) if isinstance(action, str) else None
             if cache_key is not None and cache_key in self._cache:
                 return {**self._cache[cache_key], "_from_cache": True}
 
             if action in {"read_file", "list_directory", "delete_directory"}:
-                result = tool(step.get("path", "."))
+                result = tool(validated_step.path or ".")
             elif action in {"run_command", "run_interactive_command"}:
-                result = tool(step.get("command", ""))
+                result = tool(validated_step.command or "")
             elif action in {"write_file", "append_file", "write_docx"}:
-                result = tool(step.get("path", ""), step.get("content", ""))
+                result = tool(validated_step.path or "", validated_step.content or "")
             elif action == "apply_patch":
-                result = tool(step.get("path", ""), step.get("patches", []))
+                result = tool(
+                    validated_step.path or "",
+                    [patch.model_dump() for patch in validated_step.patches],
+                )
             else:
                 return {"ok": False, "error": f"Unsupported action signature: {action}"}
 
             if cache_key is not None and result.get("ok") is True:
                 self._cache[cache_key] = dict(result)
 
-            self._invalidate_cache_for_step(str(action), step)
+            self._invalidate_cache_for_step(str(action), step_data)
             return result
+        except ValidationError as exc:
+            return {"ok": False, "error": f"Invalid step format: {exc}"}
         except Exception as exc:
             return {"ok": False, "error": f"Worker execution failed for {action}: {exc}"}

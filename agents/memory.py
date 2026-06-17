@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from agents.state import AgentState
+from schemas.models import MemoryEntry
 
 
 MEMORY_FILE = Path(__file__).resolve().parent.parent / ".agent_memory" / "memory.json"
@@ -21,9 +22,21 @@ def load_memory() -> dict[str, Any]:
         return {}
 
     if isinstance(data, dict) and isinstance(data.get("entries"), list):
-        return {"entries": data["entries"]}
+        validated_entries = []
+        for entry in data["entries"]:
+            try:
+                validated_entries.append(MemoryEntry.model_validate(entry).model_dump())
+            except Exception:
+                continue
+        return {"entries": validated_entries} if validated_entries else {}
     if isinstance(data, list):
-        return {"entries": data}
+        validated_entries = []
+        for entry in data:
+            try:
+                validated_entries.append(MemoryEntry.model_validate(entry).model_dump())
+            except Exception:
+                continue
+        return {"entries": validated_entries} if validated_entries else {}
     return {}
 
 
@@ -53,16 +66,15 @@ def save_memory(state: AgentState) -> None:
             if path:
                 read_files.append(path)
 
-    entries.append(
-        {
-            "task": state.task,
-            "status": state.final_status,
-            "created_files": created_files,
-            "ran_commands": ran_commands,
-            "read_files": read_files,
-            "timestamp": datetime.now().isoformat(timespec="seconds"),
-        }
+    entry = MemoryEntry(
+        task=state.task,
+        status=state.final_status,
+        created_files=created_files,
+        ran_commands=ran_commands,
+        read_files=read_files,
+        timestamp=datetime.now().isoformat(timespec="seconds"),
     )
+    entries.append(entry.model_dump())
     entries = entries[-10:]
 
     MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)

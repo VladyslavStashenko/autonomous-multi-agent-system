@@ -34,6 +34,13 @@ def test_unknown_action_returns_error() -> None:
     assert "Unknown action" in result["error"]
 
 
+def test_invalid_worker_step_format_returns_error() -> None:
+    result = Worker().execute_step({"action": "read_file"})
+
+    assert result["ok"] is False
+    assert "Invalid step format" in result["error"]
+
+
 def test_repeated_read_uses_cache(isolated_project_root: Path) -> None:
     cached_file = isolated_project_root / "cached.txt"
     cached_file.write_text("cached content", encoding="utf-8")

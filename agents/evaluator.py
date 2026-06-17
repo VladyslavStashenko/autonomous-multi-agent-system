@@ -5,8 +5,10 @@ import re
 from typing import Any, Callable
 
 from google import genai
+from pydantic import ValidationError
 
 from agents.state import AgentState
+from schemas.models import EvaluatorResponse
 
 
 class Evaluator:
@@ -77,18 +79,8 @@ Results:
 
         try:
             data = json.loads(self._strip_markdown_fence(raw_text))
-            status = data.get("status")
-            summary = data.get("summary", "")
-            retry_step_indexes = data.get("retry_step_indexes", [])
-            if status not in {"SUCCESS", "FAIL"}:
-                raise ValueError("Invalid status.")
-            if not isinstance(retry_step_indexes, list):
-                raise ValueError("retry_step_indexes must be a list.")
-            return {
-                "status": status,
-                "summary": summary,
-                "retry_step_indexes": retry_step_indexes,
-            }
+            parsed = EvaluatorResponse.model_validate(data)
+            return parsed.model_dump()
         except Exception:
             fallback_fail = [i for i, r in enumerate(results) if not r.get("ok")]
             if not fallback_fail:
@@ -127,14 +119,8 @@ State history:
         raw_text = (response.text or "").strip()
         try:
             data = json.loads(self._strip_markdown_fence(raw_text))
-            status = data.get("status")
-            if status not in {"SUCCESS", "FAIL"}:
-                raise ValueError("Invalid status.")
-            return {
-                "status": status,
-                "summary": data.get("summary", ""),
-                "retry_step_indexes": data.get("retry_step_indexes", []),
-            }
+            parsed = EvaluatorResponse.model_validate(data)
+            return parsed.model_dump()
         except Exception:
             latest_result = state.steps_history[-1]["result"]
             if latest_result.get("ok"):
