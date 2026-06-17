@@ -6,6 +6,7 @@ from typing import Any
 from agents.memory import load_memory
 from config import Settings
 from session import SESSION_FILE, build_session_state, get_effective_settings, save_session
+from storage.database import clear_database
 from ui.input import choose_option
 from ui.logo import print_logo
 from ui.renderer import clear_screen
@@ -54,6 +55,7 @@ def handle_command(
             session_file = SESSION_FILE
             if memory_file.exists():
                 memory_file.unlink()
+            clear_database()
             if state_file.exists():
                 state_file.unlink()
             if session_file.exists():

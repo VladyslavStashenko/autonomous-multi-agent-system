@@ -27,6 +27,16 @@ def configure_database(path: Path | str) -> None:
     _SESSION_FACTORY = None
 
 
+def clear_database() -> None:
+    global _ENGINE, _SESSION_FACTORY
+    if _ENGINE is not None:
+        _ENGINE.dispose()
+    _ENGINE = None
+    _SESSION_FACTORY = None
+    if DATABASE_FILE.exists():
+        DATABASE_FILE.unlink()
+
+
 def get_engine() -> Engine:
     global _ENGINE
     if _ENGINE is None:
