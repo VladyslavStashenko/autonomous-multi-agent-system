@@ -29,6 +29,15 @@ def write_file(path: str, content: str) -> dict[str, Any]:
         return {"ok": False, "error": f"write_file failed: {exc}"}
 
 
+def create_directory(path: str) -> dict[str, Any]:
+    try:
+        dir_path = safe_path(path)
+        dir_path.mkdir(parents=True, exist_ok=True)
+        return {"ok": True, "path": str(dir_path), "message": "Directory created successfully."}
+    except Exception as exc:
+        return {"ok": False, "error": f"create_directory failed: {exc}"}
+
+
 def apply_patch(path: str, patches: list[dict[str, Any]]) -> dict[str, Any]:
     try:
         file_path = safe_path(path)
@@ -182,6 +191,19 @@ def delete_directory(path: str) -> dict[str, Any]:
         return {"ok": True, "path": str(dir_path), "message": "Directory deleted successfully."}
     except Exception as exc:
         return {"ok": False, "error": f"delete_directory failed: {exc}"}
+
+
+def delete_file(path: str) -> dict[str, Any]:
+    try:
+        file_path = safe_path(path)
+        if not file_path.exists():
+            return {"ok": False, "error": f"File does not exist: {path}"}
+        if not file_path.is_file():
+            return {"ok": False, "error": f"Path is not a file: {path}"}
+        file_path.unlink()
+        return {"ok": True, "path": str(file_path), "message": "File deleted successfully."}
+    except Exception as exc:
+        return {"ok": False, "error": f"delete_file failed: {exc}"}
 
 
 def write_docx(path: str, content: str) -> dict[str, Any]:

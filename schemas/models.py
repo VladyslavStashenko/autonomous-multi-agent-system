@@ -19,7 +19,7 @@ class WorkerStepInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_by_action(self) -> "WorkerStepInput":
-        if self.action in {"read_file", "list_directory", "delete_directory"} and not self.path:
+        if self.action in {"read_file", "list_directory", "delete_directory", "delete_file", "create_directory"} and not self.path:
             raise ValueError("path is required for this action")
         if self.action in {"run_command", "run_interactive_command"} and not self.command:
             raise ValueError("command is required for this action")

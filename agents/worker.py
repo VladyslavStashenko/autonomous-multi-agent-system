@@ -54,9 +54,9 @@ class Worker:
         path = str(step.get("path", "")).strip()
         if not path:
             return
-        if action in {"write_file", "append_file", "apply_patch"}:
+        if action in {"write_file", "append_file", "apply_patch", "delete_file"}:
             self._invalidate_file_cache(path)
-        elif action == "delete_directory":
+        elif action in {"delete_directory", "create_directory"}:
             self._invalidate_directory_cache(path)
 
     def execute_step(self, step: dict[str, Any]) -> dict[str, Any]:
@@ -72,7 +72,7 @@ class Worker:
             if cache_key is not None and cache_key in self._cache:
                 return {**self._cache[cache_key], "_from_cache": True}
 
-            if action in {"read_file", "list_directory", "delete_directory"}:
+            if action in {"read_file", "list_directory", "delete_directory", "delete_file", "create_directory"}:
                 result = tool(validated_step.path or ".")
             elif action in {"run_command", "run_interactive_command"}:
                 result = tool(validated_step.command or "")

@@ -58,3 +58,23 @@ def test_clear_command_removes_json_state_session_and_sqlite(
     assert state_file.exists() is False
     assert session_file.exists() is False
     assert isolated_database.exists() is False
+
+
+def test_agent_auto_mode_is_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    saved_sessions: list[dict] = []
+    monkeypatch.setattr(commands, "save_session", lambda session: saved_sessions.append(session))
+
+    handled, _, _, agent_type, _ = commands.handle_command(
+        "/agent auto",
+        THEMES["cyan"],
+        "technical",
+        "single",
+        Settings(api_key="x", api_keys=["x"]),
+        {},
+    )
+
+    assert handled is True
+    assert agent_type == "auto"
+    assert saved_sessions[-1]["agent_type"] == "auto"

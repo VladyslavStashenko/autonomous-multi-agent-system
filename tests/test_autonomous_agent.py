@@ -105,6 +105,28 @@ def test_autonomous_agent_plain_text_before_tool_call_continues(fake_worker, fak
     fake_worker.execute_step.assert_called_once()
 
 
+def test_autonomous_agent_normalizes_redundant_final_summary(fake_worker, fake_evaluator) -> None:
+    fake_worker.execute_step.return_value = {"ok": True, "content": "hello"}
+    agent = SequenceAutonomousAgent(
+        responses=[
+            make_function_call_response("read_file", {"path": "demo.txt"}),
+            make_text_response(
+                'Done: Deleted the "task_tracker" directory.\n\n**Short summary:**\nDeleted the "task_tracker" directory.'
+            ),
+        ],
+        pool=MagicMock(),
+        model="test-model",
+        worker=fake_worker,
+        evaluator=fake_evaluator,
+        max_steps=3,
+    )
+
+    result = agent.run("Delete task_tracker")
+
+    assert result["status"] == "done"
+    assert result["summary"] == 'Deleted the "task_tracker" directory.'
+
+
 def test_autonomous_agent_api_failure_returns_fail(fake_worker, fake_evaluator) -> None:
     agent = SequenceAutonomousAgent(
         responses=[RuntimeError("boom")],

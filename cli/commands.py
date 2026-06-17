@@ -202,6 +202,7 @@ def handle_command(
             items=[
                 ("single", "Single - current autonomous agent"),
                 ("multi", "Multi - planner, coder, reviewer"),
+                ("auto", "Auto - choose single or multi per task"),
             ],
             default_key=agent_type,
             get_preview_theme=lambda _: theme,
@@ -218,7 +219,7 @@ def handle_command(
 
     if command.startswith("/agent "):
         selected = command.split(maxsplit=1)[1].strip().lower()
-        if selected in {"single", "multi"}:
+        if selected in {"single", "multi", "auto"}:
             print()
             print(mixed_color_line([
                 ("", "Agent mode switched to "),
@@ -228,7 +229,7 @@ def handle_command(
             return True, theme, mode, selected, config_overrides
         print()
         print(color_line(theme.error, f"Unknown agent mode: {selected}"))
-        print(color_line(theme.accent, "Available agent modes: single, multi"))
+        print(color_line(theme.accent, "Available agent modes: single, multi, auto"))
         return True, theme, mode, agent_type, config_overrides
 
     if command == "/theme":

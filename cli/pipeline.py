@@ -109,7 +109,16 @@ def generate_chat_summary(
     return (response.text or "").strip()
 
 
-def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_type: str, pool: ClientPool) -> str:
+def run_pipeline(
+    task: str,
+    theme: Theme,
+    mode: str,
+    settings: Settings,
+    agent_type: str,
+    pool: ClientPool,
+    selected_agent_type: str | None = None,
+    routing_info: dict[str, Any] | None = None,
+) -> str:
     task_language = infer_task_language(task)
     worker = Worker()
     planner_model = settings.model
@@ -129,6 +138,21 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
 
     def tr(uk_text: str, en_text: str) -> str:
         return uk_text if task_language == "uk" else en_text
+
+    def print_routing_status() -> None:
+        if selected_agent_type != "auto" or not routing_info or not routing_info.get("routing_applied"):
+            return
+        effective = str(routing_info.get("effective_agent_type", agent_type)).upper()
+        reasons = routing_info.get("reasons", [])
+        reason_text = ", ".join(str(reason) for reason in reasons[:3]) if reasons else tr(
+            "евристичний вибір",
+            "heuristic choice",
+        )
+        score = routing_info.get("score")
+        threshold = routing_info.get("threshold")
+        suffix = f" ({score}/{threshold})" if score is not None and threshold is not None else ""
+        RICH_CONSOLE.print(Text(f"[AUTO -> {effective}{suffix}]", style=theme.ui_highlight))
+        RICH_CONSOLE.print(Text(f"{tr('Причина', 'Reason')}: {reason_text}", style=theme.ui_accent))
 
     def print_status_bar() -> None:
         if agent_type == "multi":
@@ -339,9 +363,11 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
     if mode == "technical":
         print()
         print(color_line(accent, f"{tr('Завдання', 'Task')}: {task}"))
+        print_routing_status()
         print()
     else:
         print()
+        print_routing_status()
 
     spinner_live = Live(
         ThinkingStatus(tr("Агент думає", "Agent is thinking"), theme.ui_accent),

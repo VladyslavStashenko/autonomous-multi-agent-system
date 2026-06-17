@@ -151,3 +151,25 @@ def test_orchestrator_reviewer_exception_returns_fail(
 
     assert result["status"] == "fail"
     assert "Reviewer failed: review exploded" == result["summary"]
+
+
+def test_review_results_normalizes_redundant_summary(
+    base_orchestrator: OrchestratorAgent,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        base_orchestrator,
+        "_call_api",
+        lambda **kwargs: type(
+            "Response",
+            (),
+            {
+                "text": '{"status":"SUCCESS","summary":"Done: Updated files.\\n\\n**Short summary:**\\nUpdated files.","issues":[]}'
+            },
+        )(),
+    )
+
+    result = base_orchestrator._review_results("Update files", ["Step 1"], [{"summary": "ok"}])
+
+    assert result["status"] == "SUCCESS"
+    assert result["summary"] == "Updated files."

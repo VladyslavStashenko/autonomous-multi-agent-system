@@ -8,6 +8,7 @@ from colorama import init
 from agents import ClientPool
 from agents.memory import load_memory
 from cli.commands import handle_command
+from cli.router import resolve_agent_type
 from cli.pipeline import is_conversational, run_pipeline
 from config import get_settings
 from session import build_session_state, get_effective_settings, load_session, save_session
@@ -39,7 +40,7 @@ def main() -> None:
     if current_mode not in {"technical", "chat"}:
         current_mode = "technical"
     current_agent_type = str(session.get("agent_type", "single")).lower()
-    if current_agent_type not in {"single", "multi"}:
+    if current_agent_type not in {"single", "multi", "auto"}:
         current_agent_type = "single"
     effective_settings = get_effective_settings(settings, config_overrides)
     clear_screen()
@@ -84,7 +85,7 @@ def main() -> None:
                     "If asked who you are — introduce yourself once briefly. "
                     "If asked what you can do — list tools sarcastically without saying your name. "
                     "If asked how you work — explain sarcastically without saying your name. "
-                    "Your actual tools are: read_file, write_file, apply_patch, list_directory, delete_directory, run_command, run_interactive_command, write_docx. "
+                    "Your actual tools are: read_file, write_file, create_directory, apply_patch, append_file, list_directory, delete_file, delete_directory, run_command, run_interactive_command, write_docx. "
                     "When asked about tools — mention only these, sarcastically. Do not invent other tools. "
                     "Respond in the same language as the user. Be brief, 2-3 sentences max. "
                     f"{memory_context}"
@@ -97,7 +98,17 @@ def main() -> None:
                 print(color_line(current_theme.highlight, (response.text or "").strip()))
                 print()
                 continue
-            run_pipeline(user_input, current_theme, current_mode, effective_settings, current_agent_type, client_pool)
+            routing = resolve_agent_type(current_agent_type, user_input)
+            run_pipeline(
+                user_input,
+                current_theme,
+                current_mode,
+                effective_settings,
+                routing["effective_agent_type"],
+                client_pool,
+                selected_agent_type=current_agent_type,
+                routing_info=routing,
+            )
         except KeyboardInterrupt:
             print()
             print(color_line(current_theme.error, "Session stopped by user."))

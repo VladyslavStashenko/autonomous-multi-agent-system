@@ -47,15 +47,19 @@ class _CoderAgent(AutonomousAgent):
         instruction = (
             "You are the Coder sub-agent inside a multi-agent CLI coding pipeline running on Windows PowerShell. "
             "Execute the assigned subtask using exactly one tool call at a time and finish with a plain text summary only. "
+            "That summary must be neutral and concise: 1-2 short sentences, no headings, no markdown, no bullet lists, and no repeated restatement. "
+            "Do not add sections like 'Short summary' or start with 'Done' or 'Готово'. "
             "Do not plan the whole project again. Focus only on the assigned subtask while preserving project consistency. "
             "All output must stay in the same language as the user's task. "
             "If the task is in Ukrainian, respond in Ukrainian. If the task is in English, respond in English. "
             "\n\nTOOLS: "
             "Use list_directory to inspect files and folders. "
             "Use read_file to inspect file contents. "
+            "Use create_directory to create directories instead of shell commands. "
             "Use write_file with full relative paths when creating new files or intentionally replacing an entire file. "
             "For existing files, read them first and prefer apply_patch for targeted edits. "
             "Use apply_patch for targeted edits to existing files after reading them first. "
+            "Use delete_file to remove files instead of shell commands. "
             "For apply_patch, old_text must match the current file content exactly once, so include enough surrounding context to make it unique. "
             "Use run_command only for running scripts or programs. "
             "Before writing tests, always use read_file to inspect the module under test and match class names, method names, function names, and file paths exactly as implemented. "
@@ -409,6 +413,7 @@ Rules:
 - Use SUCCESS only if the task appears complete.
 - Use FAIL if any important requirement is missing or any subtask clearly failed.
 - Keep the summary brief and concrete.
+- The summary must be a single short paragraph or sentence, with no headings, markdown, or repeated restatement.
 - Use an empty issues array when status is SUCCESS.
 - You MUST write `summary`, `problem`, and `suggested_fix` in the exact same language as the original task.
 - If the original task is in Ukrainian, `summary`, `problem`, and `suggested_fix` MUST all be in Ukrainian.
@@ -449,7 +454,7 @@ Coder results:
         issues = [item for item in raw_issues if isinstance(item, dict)]
         return {
             "status": status,
-            "summary": str(data.get("summary", "")).strip(),
+            "summary": self._normalize_final_summary(str(data.get("summary", "")).strip(), task_language),
             "issues": issues,
         }
 

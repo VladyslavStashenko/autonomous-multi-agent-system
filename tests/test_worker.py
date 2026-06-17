@@ -27,6 +27,13 @@ def test_write_file_creates_file_with_content(isolated_project_root: Path) -> No
     assert (isolated_project_root / "created.txt").read_text(encoding="utf-8") == "created content"
 
 
+def test_create_directory_creates_directory(isolated_project_root: Path) -> None:
+    result = Worker().execute_step({"action": "create_directory", "path": "nested/folder"})
+
+    assert result["ok"] is True
+    assert (isolated_project_root / "nested" / "folder").is_dir()
+
+
 def test_unknown_action_returns_error() -> None:
     result = Worker().execute_step({"action": "unknown_action"})
 
@@ -138,6 +145,20 @@ def test_apply_patch_invalidates_read_cache(isolated_project_root: Path) -> None
     assert read_after_patch["ok"] is True
     assert "_from_cache" not in read_after_patch
     assert read_after_patch["content"] == "after"
+
+
+def test_delete_file_invalidates_read_cache(isolated_project_root: Path) -> None:
+    target = isolated_project_root / "cached.txt"
+    target.write_text("before", encoding="utf-8")
+    worker = Worker()
+
+    worker.execute_step({"action": "read_file", "path": "cached.txt"})
+    delete_result = worker.execute_step({"action": "delete_file", "path": "cached.txt"})
+    read_after_delete = worker.execute_step({"action": "read_file", "path": "cached.txt"})
+
+    assert delete_result["ok"] is True
+    assert read_after_delete["ok"] is False
+    assert "_from_cache" not in read_after_delete
 
 
 def test_unsupported_action_signature_returns_error(

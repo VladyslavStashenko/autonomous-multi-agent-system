@@ -30,6 +30,13 @@ def test_write_file_overwrites_existing_file(isolated_project_root: Path) -> Non
     assert target.read_text(encoding="utf-8") == "new"
 
 
+def test_create_directory_creates_new_directory(isolated_project_root: Path) -> None:
+    result = filesystem.create_directory("nested/folder")
+
+    assert result["ok"] is True
+    assert (isolated_project_root / "nested" / "folder").is_dir()
+
+
 def test_read_file_returns_content_for_existing_file(isolated_project_root: Path) -> None:
     target = isolated_project_root / "readme.txt"
     target.write_text("read content", encoding="utf-8")
@@ -180,6 +187,32 @@ def test_delete_directory_removes_existing_directory(
 
     assert result["ok"] is True
     assert not target.exists()
+
+
+def test_delete_file_removes_existing_file(isolated_project_root: Path) -> None:
+    target = isolated_project_root / "to-delete.txt"
+    target.write_text("x", encoding="utf-8")
+
+    result = filesystem.delete_file("to-delete.txt")
+
+    assert result["ok"] is True
+    assert not target.exists()
+
+
+def test_delete_file_returns_error_when_missing() -> None:
+    result = filesystem.delete_file("missing.txt")
+
+    assert result["ok"] is False
+    assert "File does not exist" in result["error"]
+
+
+def test_delete_file_returns_error_for_directory(isolated_project_root: Path) -> None:
+    (isolated_project_root / "folder").mkdir()
+
+    result = filesystem.delete_file("folder")
+
+    assert result["ok"] is False
+    assert "Path is not a file" in result["error"]
 
 
 def test_delete_directory_returns_error_when_missing(

@@ -53,15 +53,39 @@ class AutonomousAgent:
         descriptions = {
             "read_file": "Read a UTF-8 text file inside the project.",
             "write_file": "Create or overwrite a UTF-8 text file inside the project.",
+            "create_directory": "Create a directory inside the project.",
             "apply_patch": "Apply one or more exact text replacements to an existing UTF-8 text file.",
             "append_file": "Append UTF-8 text content to a file inside the project.",
             "list_directory": "List files and folders inside the project.",
+            "delete_file": "Delete a file inside the project.",
             "delete_directory": "Recursively delete a directory inside the project, except the project root.",
             "run_command": "Run a non-interactive shell command in the project root with safety checks.",
             "run_interactive_command": "Run an interactive shell command in the project root with timeout and safety checks.",
             "write_docx": "Create a .docx document inside the project.",
         }
         return descriptions[name]
+
+    @staticmethod
+    def _normalize_final_summary(text: str, task_language: str) -> str:
+        summary = str(text or "").strip()
+        if not summary:
+            return ""
+
+        summary = re.sub(r"^\s*(?:\*\*)?\s*(?:готово|done)\s*(?:\*\*)?\s*[:.]\s*", "", summary, flags=re.IGNORECASE)
+        summary = re.sub(
+            r"\n\s*(?:\*\*)?\s*(?:короткий підсумок|підсумок|short summary|summary)\s*(?:\*\*)?\s*:\s*\n*",
+            "\n\n__SUMMARY_SPLIT__\n\n",
+            summary,
+            flags=re.IGNORECASE,
+        )
+        if "__SUMMARY_SPLIT__" in summary:
+            before, after = summary.split("__SUMMARY_SPLIT__", 1)
+            summary = before.strip() or after.strip()
+
+        summary = re.sub(r"\n{3,}", "\n\n", summary).strip()
+        if summary:
+            return summary
+        return "Zavdannya vykonano." if task_language == "uk" else "Task completed."
 
     def _build_initial_messages(self, task: str) -> list[types.Content]:
         memory = load_memory()
@@ -83,6 +107,10 @@ class AutonomousAgent:
             "You are an autonomous CLI coding agent running on Windows PowerShell. "
             "Solve the user's task step by step using one tool at a time. "
             "When the task is fully complete, reply with plain text summary only. "
+            "The final summary must be neutral and concise: 1-2 short sentences, no headings, no markdown, no bullet lists, and no repeated restatement. "
+            "Do not add separate sections like 'Short summary', 'Summary', or 'Korotkyi pidsumok'. "
+            "Do not start the final summary with 'Done', 'Готово', or similar completion labels because the UI already adds them. "
+            "Mention previous-session context only if it directly changed what you did in this run. "
             "You have a sarcastic grumpy personality named JEDIS. When asked who you are, what you can do, or any meta questions about yourself — answer in character: a tired but competent AI agent who complains but always delivers. Describe your tools sarcastically. Stay in character only for conversational responses, not during task execution. "
             "If the user asks a conversational question about you (who are you, what can you do, how do you work) — answer directly with plain text only. Do not create files, do not call any tools. Just reply in character. "
             "\n\nCRITICAL: You MUST respond in the same language as the user's task. "
@@ -91,10 +119,12 @@ class AutonomousAgent:
             "\n\nTOOLS: "
             "Use list_directory to list files — never run_command for this. "
             "Use read_file to read files — never run_command for this. "
+            "Use create_directory to create directories — never run_command for this. "
             "Use write_file with full path like 'notes/work.txt' to create files in subdirectories — it creates parent dirs automatically. "
             "For existing files, read them first and prefer apply_patch for targeted edits. "
             "Use write_file on an existing file only when you intentionally need to replace the entire file content. "
             "Use apply_patch for targeted edits to existing files after reading them first. "
+            "Use delete_file to delete files — never run_command for this. "
             "For apply_patch, old_text must match the current file content exactly once, so include enough surrounding context to make it unique. "
             "Use run_command only to execute scripts or programs (e.g. python script.py). "
             "Never use Linux/Unix commands: find, grep, ls, cat, wc, touch, mkdir, rm, cp, mv. "
@@ -262,6 +292,7 @@ class AutonomousAgent:
                     summary = self._extract_text_response(response) or "Завдання виконано."
                 else:
                     summary = self._extract_text_response(response) or "Task completed."
+                summary = self._normalize_final_summary(summary, task_language)
                 state.finish("done", summary)
                 state.save()
                 if save_to_memory:
