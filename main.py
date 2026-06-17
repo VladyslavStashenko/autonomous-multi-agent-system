@@ -11,6 +11,7 @@ from cli.commands import handle_command
 from cli.pipeline import is_conversational, run_pipeline
 from config import get_settings
 from session import build_session_state, get_effective_settings, load_session, save_session
+from storage.database import init_db
 from ui.input import framed_input
 from ui.logo import print_logo
 from ui.renderer import clear_screen
@@ -20,6 +21,7 @@ from ui.theme import THEMES, build_prompt_style, color_line
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     init(autoreset=False)
+    init_db()
     settings = get_settings()
     client_pool = ClientPool(settings.api_keys)
     session = load_session()

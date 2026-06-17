@@ -1,5 +1,6 @@
 google-genai
 pydantic>=2,<3
+sqlalchemy>=2,<3
 colorama
 prompt_toolkit
 python-docx

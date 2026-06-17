@@ -7,12 +7,13 @@ from typing import Any
 
 from agents.state import AgentState
 from schemas.models import MemoryEntry
+from storage.repository import get_recent_memory_entries, save_memory_entry
 
 
 MEMORY_FILE = Path(__file__).resolve().parent.parent / ".agent_memory" / "memory.json"
 
 
-def load_memory() -> dict[str, Any]:
+def _load_memory_from_json_fallback() -> dict[str, Any]:
     if not MEMORY_FILE.exists():
         return {}
 
@@ -40,10 +41,15 @@ def load_memory() -> dict[str, Any]:
     return {}
 
 
-def save_memory(state: AgentState) -> None:
-    memory = load_memory()
-    entries = list(memory.get("entries", []))
+def load_memory() -> dict[str, Any]:
+    try:
+        entries = get_recent_memory_entries(limit=10)
+    except Exception:
+        return _load_memory_from_json_fallback()
+    return {"entries": entries} if entries else _load_memory_from_json_fallback()
 
+
+def save_memory(state: AgentState) -> None:
     created_files: list[str] = []
     ran_commands: list[str] = []
     read_files: list[str] = []
@@ -74,8 +80,8 @@ def save_memory(state: AgentState) -> None:
         read_files=read_files,
         timestamp=datetime.now().isoformat(timespec="seconds"),
     )
-    entries.append(entry.model_dump())
-    entries = entries[-10:]
+    save_memory_entry(entry)
+    entries = get_recent_memory_entries(limit=10)
 
     MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
     MEMORY_FILE.write_text(

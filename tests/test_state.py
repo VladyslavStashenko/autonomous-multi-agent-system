@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from agents.state import AgentState
+from storage.repository import get_last_run
 
 
 def test_add_step_populates_all_tracking_lists() -> None:
@@ -40,7 +41,7 @@ def test_to_dict_returns_expected_dataclass_structure() -> None:
     assert payload["steps_history"][0]["step"] == 1
 
 
-def test_save_writes_json_file(tmp_path: Path) -> None:
+def test_save_writes_json_file_and_persists_run(tmp_path: Path, isolated_database: Path) -> None:
     target = tmp_path / "state" / "run.json"
     state = AgentState(task="task")
     state.add_step(step_number=1, decision={"action": "read_file"}, result={"ok": True})
@@ -53,3 +54,8 @@ def test_save_writes_json_file(tmp_path: Path) -> None:
     assert payload["task"] == "task"
     assert payload["final_status"] == "done"
     assert payload["steps_history"][0]["decision"]["action"] == "read_file"
+
+    last_run = get_last_run()
+    assert last_run is not None
+    assert last_run["task"] == "task"
+    assert last_run["status"] == "done"

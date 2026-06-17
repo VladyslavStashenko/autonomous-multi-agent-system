@@ -7,13 +7,16 @@ import pytest
 
 from agents import memory
 from agents.state import AgentState
+from storage.database import init_db
 
 
 def test_load_memory_returns_empty_dict_when_file_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    isolated_database: Path,
 ) -> None:
     monkeypatch.setattr(memory, "MEMORY_FILE", tmp_path / "memory.json")
+    init_db()
 
     assert memory.load_memory() == {}
 
@@ -21,9 +24,11 @@ def test_load_memory_returns_empty_dict_when_file_missing(
 def test_save_memory_creates_entries_structure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    isolated_database: Path,
 ) -> None:
     memory_file = tmp_path / "memory.json"
     monkeypatch.setattr(memory, "MEMORY_FILE", memory_file)
+    init_db()
 
     state = AgentState(task="save memory")
     state.add_step(
@@ -45,9 +50,11 @@ def test_save_memory_creates_entries_structure(
 def test_save_memory_keeps_only_last_ten_entries(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    isolated_database: Path,
 ) -> None:
     memory_file = tmp_path / "memory.json"
     monkeypatch.setattr(memory, "MEMORY_FILE", memory_file)
+    init_db()
 
     for index in range(12):
         state = AgentState(task=f"task-{index}")
@@ -64,9 +71,11 @@ def test_save_memory_keeps_only_last_ten_entries(
 def test_load_memory_reads_saved_entries(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    isolated_database: Path,
 ) -> None:
     memory_file = tmp_path / "memory.json"
     monkeypatch.setattr(memory, "MEMORY_FILE", memory_file)
+    init_db()
     memory_file.write_text(
         json.dumps(
             {
@@ -101,6 +110,7 @@ def test_load_memory_reads_saved_entries(
 def test_load_memory_skips_invalid_entries(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    isolated_database: Path,
 ) -> None:
     memory_file = tmp_path / "memory.json"
     monkeypatch.setattr(memory, "MEMORY_FILE", memory_file)
@@ -130,3 +140,30 @@ def test_load_memory_skips_invalid_entries(
             }
         ]
     }
+
+
+def test_load_memory_falls_back_to_json_when_database_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    memory_file = tmp_path / "memory.json"
+    monkeypatch.setattr(memory, "MEMORY_FILE", memory_file)
+    monkeypatch.setattr(memory, "get_recent_memory_entries", lambda limit=10: (_ for _ in ()).throw(RuntimeError("db down")))
+    memory_file.write_text(
+        json.dumps(
+            {
+                "entries": [
+                    {
+                        "task": "json fallback",
+                        "status": "done",
+                        "timestamp": "2025-01-01T00:00:00",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = memory.load_memory()
+
+    assert payload["entries"][0]["task"] == "json fallback"

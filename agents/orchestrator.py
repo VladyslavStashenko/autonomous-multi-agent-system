@@ -34,6 +34,7 @@ class _CoderAgent(AutonomousAgent):
             on_step=on_step,
         )
         self.subtask_context = subtask_context
+        self.agent_type = "coder"
 
     def _build_initial_messages(self, task: str) -> list[types.Content]:
         task_language = self._infer_task_language(task)
@@ -120,6 +121,7 @@ class OrchestratorAgent(AutonomousAgent):
         self.subtask_delay_seconds = max(0.0, subtask_delay_seconds)
         self.max_subtask_retries = max(0, max_subtask_retries)
         self.max_review_cycles = max(0, max_review_cycles)
+        self.agent_type = "multi"
 
     @staticmethod
     def _infer_task_language(text: str) -> str:
@@ -204,7 +206,7 @@ class OrchestratorAgent(AutonomousAgent):
 
     @staticmethod
     def _build_pipeline_state(task: str, status: str, summary: str, subtask_results: list[dict[str, Any]]) -> AgentState:
-        state = AgentState(task=task)
+        state = AgentState(task=task, agent_type="multi")
         step_number = 0
 
         for subtask_result in subtask_results:
@@ -623,6 +625,7 @@ Coder results:
             if result.get("status") != "done":
                 pipeline_summary = f"Subtask failed: {subtask}. {result.get('summary', '')}".strip()
                 pipeline_state = self._build_pipeline_state(task, "fail", pipeline_summary, subtask_results)
+                pipeline_state.save()
                 save_memory(pipeline_state)
                 return {
                     "status": "fail",
@@ -727,6 +730,7 @@ Coder results:
                 self.on_stage("reviewer", {"status": "FAIL", "error": str(exc)})
             pipeline_summary = f"Reviewer failed: {exc}"
             pipeline_state = self._build_pipeline_state(task, "fail", pipeline_summary, subtask_results)
+            pipeline_state.save()
             save_memory(pipeline_state)
             return {
                 "status": "fail",
@@ -738,6 +742,7 @@ Coder results:
         final_status = "done" if review["status"] == "SUCCESS" else "fail"
         final_summary = review["summary"] or "Multi-agent pipeline finished."
         pipeline_state = self._build_pipeline_state(task, final_status, final_summary, subtask_results)
+        pipeline_state.save()
         save_memory(pipeline_state)
         if self.on_stage is not None:
             self.on_stage(

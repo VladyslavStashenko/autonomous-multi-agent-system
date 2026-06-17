@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from agents.state import AgentState
+from storage.database import configure_database
 from tools import filesystem, security
 
 
@@ -13,6 +14,13 @@ def isolated_project_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Pa
     monkeypatch.setattr(security, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(filesystem, "PROJECT_ROOT", tmp_path)
     return tmp_path
+
+
+@pytest.fixture
+def isolated_database(tmp_path: Path) -> Path:
+    db_path = tmp_path / "agent.db"
+    configure_database(db_path)
+    return db_path
 
 
 @pytest.fixture

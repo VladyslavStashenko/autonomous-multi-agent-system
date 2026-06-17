@@ -30,6 +30,7 @@ class AutonomousAgent:
         self.max_steps = max_steps
         self.on_step = on_step
         self._consecutive_429_rotations = 0
+        self.agent_type = "single"
 
     def _build_function_tools(self) -> list[types.Tool]:
         declarations = []
@@ -194,7 +195,7 @@ class AutonomousAgent:
         use_step_evaluator: bool = True,
     ) -> dict[str, Any]:
         task_language = self._infer_task_language(task)
-        state = AgentState(task=task)
+        state = AgentState(task=task, agent_type=self.agent_type)
         # Start each task from a clean state so step numbering always begins at 1.
         state.steps_history.clear()
         state.decisions.clear()
