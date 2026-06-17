@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from difflib import SequenceMatcher
 from pathlib import Path
+import time
 from typing import Any
 import re
 
@@ -15,6 +16,22 @@ from agents import AutonomousAgent, ClientPool, Evaluator, OrchestratorAgent, Wo
 from config import Settings
 from ui.renderer import RICH_CONSOLE, format_error, render_chat_step, short_result
 from ui.theme import Theme, color_line
+
+
+class ThinkingStatus:
+    def __init__(self, message: str, style: str, speed: float = 0.15) -> None:
+        self.message = message
+        self.style = style
+        self.speed = speed
+        self._frames = ["...", "..", "."]
+        self._started_at = time.monotonic()
+        self._spinner = Spinner("dots", text=Text("", style=self.style), style=self.style)
+
+    def __rich_console__(self, console, options):
+        elapsed = time.monotonic() - self._started_at
+        frame_index = int(elapsed / self.speed) % len(self._frames)
+        self._spinner.text = Text(f"{self.message} {self._frames[frame_index]}", style=self.style)
+        yield from self._spinner.__rich_console__(console, options)
 
 
 def get_changed_line_numbers(old_content: str, new_content: str) -> set[int]:
@@ -93,6 +110,7 @@ def generate_chat_summary(
 
 
 def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_type: str, pool: ClientPool) -> str:
+    task_language = infer_task_language(task)
     worker = Worker()
     planner_model = settings.model
     coder_model = "gemini-2.5-flash-lite"
@@ -108,6 +126,9 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
     highlight = theme.highlight
     current_step = {"value": 0}
     planner_state: list[dict[str, Any]] = []
+
+    def tr(uk_text: str, en_text: str) -> str:
+        return uk_text if task_language == "uk" else en_text
 
     def print_status_bar() -> None:
         if agent_type == "multi":
@@ -137,7 +158,7 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
 
     def resume_spinner(message: str) -> None:
         if spinner_live is not None:
-            spinner_live.update(Spinner("dots", text=message, style=theme.ui_accent), refresh=True)
+            spinner_live.update(ThinkingStatus(message, theme.ui_accent), refresh=True)
             spinner_live.start()
 
     original_execute_step = worker.execute_step
@@ -184,10 +205,10 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
 
         pause_spinner()
         if mode == "technical" and reason:
-            RICH_CONSOLE.print(Text(f"Reason: {reason}", style=theme.ui_highlight))
-        render_chat_step(action, args, result, theme)
+            RICH_CONSOLE.print(Text(f"{tr('Причина', 'Reason')}: {reason}", style=theme.ui_highlight))
+        render_chat_step(action, args, result, theme, language=task_language)
         print_status_bar()
-        resume_spinner("Agent is thinking about the next step...")
+        resume_spinner(tr("Агент обмірковує наступний крок", "Agent is thinking about the next step"))
 
     def on_multi_stage(stage: str, payload: dict[str, Any]) -> None:
         pause_spinner()
@@ -201,12 +222,12 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
                 RICH_CONSOLE.print(
                     Panel(
                         format_error(str(payload.get("error", "Unknown error."))),
-                        title=" Planner ",
+                        title=f" {tr('Планувальник', 'Planner')} ",
                         border_style=theme.ui_error,
                     )
                 )
             print_status_bar()
-            resume_spinner("Planner finished. Starting subtasks...")
+            resume_spinner(tr("Планувальник завершив роботу. Починаємо підзадачі", "Planner finished. Starting subtasks..."))
             return
         if stage == "coder_start":
             subtask = str(payload.get("subtask", "")).strip()
@@ -217,7 +238,7 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
                 )
             )
             print_status_bar()
-            resume_spinner("Coder is working on the subtask...")
+            resume_spinner(tr("Кодер працює над підзадачею", "Coder is working on the subtask"))
             return
         if stage == "coder_done":
             index = int(payload.get("index", 0)) - 1
@@ -231,35 +252,44 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
                 color = theme.ui_success if status == "done" else theme.ui_error
                 RICH_CONSOLE.print(Text(summary, style=color))
             print_status_bar()
-            resume_spinner("Preparing the next subtask...")
+            resume_spinner(tr("Підготовка наступної підзадачі", "Preparing the next subtask"))
             return
         if stage == "coder_retry":
             reason = str(payload.get("reason", "")).strip()
-            retry_message = f"Retry {payload.get('attempt', '?')} for subtask {payload.get('index', '?')}"
+            retry_message = tr(
+                f"Повтор {payload.get('attempt', '?')} для підзадачі {payload.get('index', '?')}",
+                f"Retry {payload.get('attempt', '?')} for subtask {payload.get('index', '?')}",
+            )
             if reason:
                 retry_message = f"{retry_message}: {reason}"
-            RICH_CONSOLE.print(Panel(retry_message, title=" Retry ", border_style=theme.ui_error))
+            RICH_CONSOLE.print(Panel(retry_message, title=f" {tr('Повтор', 'Retry')} ", border_style=theme.ui_error))
             print_status_bar()
-            resume_spinner("Retrying the subtask...")
+            resume_spinner(tr("Повторний запуск підзадачі", "Retrying the subtask"))
             return
         if stage == "repair_start":
             RICH_CONSOLE.print(
-                Text(f"[Repair {payload.get('cycle', '?')}] {payload.get('subtask', '')}", style=theme.ui_accent)
+                Text(f"[{tr('Виправлення', 'Repair')} {payload.get('cycle', '?')}] {payload.get('subtask', '')}", style=theme.ui_accent)
             )
             print_status_bar()
-            resume_spinner("Repair cycle is running...")
+            resume_spinner(tr("Триває цикл виправлення", "Repair cycle is running"))
             return
         if stage == "repair_done":
-            message = str(payload.get("summary", "")).strip() or f"Cycle {payload.get('cycle', '?')} finished."
-            RICH_CONSOLE.print(Panel(message, title=" Repair ", border_style=theme.ui_highlight))
+            message = str(payload.get("summary", "")).strip() or tr(
+                f"Цикл {payload.get('cycle', '?')} завершено.",
+                f"Cycle {payload.get('cycle', '?')} finished.",
+            )
+            RICH_CONSOLE.print(Panel(message, title=f" {tr('Виправлення', 'Repair')} ", border_style=theme.ui_highlight))
             print_status_bar()
-            resume_spinner("Reviewing the repair...")
+            resume_spinner(tr("Перевірка виправлення", "Reviewing the repair"))
             return
         if stage == "review_retry":
-            message = f"Cycle {payload.get('cycle', '?')}, issues: {payload.get('issues_count', 0)}"
-            RICH_CONSOLE.print(Panel(message, title=" Review Retry ", border_style=theme.ui_accent))
+            message = tr(
+                f"Цикл {payload.get('cycle', '?')}, проблем: {payload.get('issues_count', 0)}",
+                f"Cycle {payload.get('cycle', '?')}, issues: {payload.get('issues_count', 0)}",
+            )
+            RICH_CONSOLE.print(Panel(message, title=f" {tr('Повторна перевірка', 'Review Retry')} ", border_style=theme.ui_accent))
             print_status_bar()
-            resume_spinner("Reviewer requested another pass...")
+            resume_spinner(tr("Reviewer запросив ще один прохід...", "Reviewer requested another pass..."))
             return
         if stage == "pipeline_summary":
             summary_text = (
@@ -271,17 +301,17 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
             )
             RICH_CONSOLE.print(Panel(summary_text, title=" Pipeline ", border_style=theme.ui_highlight))
             print_status_bar()
-            resume_spinner("Finalizing the pipeline...")
+            resume_spinner(tr("Завершення пайплайну...", "Finalizing the pipeline..."))
             return
         if stage == "reviewer":
             reviewer_status = str(payload.get("status", "FAIL")).upper()
             reviewer_color = theme.ui_success if reviewer_status == "SUCCESS" else theme.ui_error
             message = str(payload.get("summary") or payload.get("error") or reviewer_status).strip()
             RICH_CONSOLE.print(
-                Panel(message, title=f" Reviewer: {reviewer_status} ", border_style=reviewer_color)
+                Panel(message, title=f" {tr('Reviewer', 'Reviewer')}: {reviewer_status} ", border_style=reviewer_color)
             )
             print_status_bar()
-            resume_spinner("Continuing after review...")
+            resume_spinner(tr("Продовження після перевірки", "Continuing after review"))
 
     if agent_type == "multi":
         agent = OrchestratorAgent(
@@ -308,13 +338,13 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
 
     if mode == "technical":
         print()
-        print(color_line(accent, f"Task: {task}"))
+        print(color_line(accent, f"{tr('Завдання', 'Task')}: {task}"))
         print()
     else:
         print()
 
     spinner_live = Live(
-        Spinner("dots", text="Agent is thinking...", style=theme.ui_accent),
+        ThinkingStatus(tr("Агент думає", "Agent is thinking"), theme.ui_accent),
         console=RICH_CONSOLE,
         refresh_per_second=12,
         transient=True,
@@ -322,7 +352,6 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
     with spinner_live:
         result = agent.run(task)
     summary = result.get("summary", "")
-    task_language = infer_task_language(task)
 
     chat_summary = ""
     if mode != "technical":
@@ -348,7 +377,7 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
     if result["status"] == "done":
         if mode == "technical":
             print()
-            print(color_line(highlight, f"  Done: {summary}"))
+            print(color_line(highlight, f"  {tr('Готово', 'Done')}: {summary}"))
             print()
         else:
             print()
@@ -360,7 +389,10 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
     elif result["status"] == "max_steps":
         if mode == "technical":
             print()
-            print(color_line(error, f"Task stopped after reaching the step limit ({settings.max_agent_steps})."))
+            print(color_line(error, tr(
+                f"Завдання зупинено після досягнення ліміту кроків ({settings.max_agent_steps}).",
+                f"Task stopped after reaching the step limit ({settings.max_agent_steps}).",
+            )))
             if summary:
                 print(color_line(error, format_error(summary)))
             print()
@@ -378,7 +410,10 @@ def run_pipeline(task: str, theme: Theme, mode: str, settings: Settings, agent_t
     else:
         if mode == "technical":
             print()
-            print(color_line(error, f"Task failed: {format_error(summary or 'Unknown failure.')}"))
+            print(color_line(error, tr(
+                f"Помилка виконання завдання: {format_error(summary or 'Невідома помилка.')}",
+                f"Task failed: {format_error(summary or 'Unknown failure.')}",
+            )))
             print()
         else:
             print()

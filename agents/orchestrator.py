@@ -36,6 +36,13 @@ class _CoderAgent(AutonomousAgent):
         self.subtask_context = subtask_context
 
     def _build_initial_messages(self, task: str) -> list[types.Content]:
+        task_language = self._infer_task_language(task)
+        if task_language == "uk":
+            context_label = "КОНТЕКСТ"
+            assigned_subtask_label = "Призначена підзадача"
+        else:
+            context_label = "CONTEXT"
+            assigned_subtask_label = "Assigned subtask"
         instruction = (
             "You are the Coder sub-agent inside a multi-agent CLI coding pipeline running on Windows PowerShell. "
             "Execute the assigned subtask using exactly one tool call at a time and finish with a plain text summary only. "
@@ -57,10 +64,10 @@ class _CoderAgent(AutonomousAgent):
             "Use only cmd-compatible commands in run_command. "
             "Do not use PowerShell-only cmdlets in run_command, including New-Item, Get-ChildItem, Set-Content, Remove-Item, Test-Path, or Copy-Item. "
             "For directories use mkdir, for listing use dir, for file display use type, for deleting files use del, and for deleting directories use rmdir. "
-            "\n\nCONTEXT: "
+            f"\n\n{context_label}: "
             f"{self.subtask_context}"
         )
-        user_message = f"Assigned subtask:\n{task}"
+        user_message = f"{assigned_subtask_label}:\n{task}"
         return [
             types.Content(
                 role="user",
@@ -113,6 +120,10 @@ class OrchestratorAgent(AutonomousAgent):
         self.subtask_delay_seconds = max(0.0, subtask_delay_seconds)
         self.max_subtask_retries = max(0, max_subtask_retries)
         self.max_review_cycles = max(0, max_review_cycles)
+
+    @staticmethod
+    def _infer_task_language(text: str) -> str:
+        return "uk" if re.search(r"[А-Яа-яІіЇїЄєҐґ]", text) else "en"
 
     @staticmethod
     def _is_python_module_path(path: str) -> bool:
@@ -174,13 +185,20 @@ class OrchestratorAgent(AutonomousAgent):
         return []
 
     @staticmethod
-    def _format_artifact_context(artifacts: list[dict[str, str]]) -> str:
+    def _format_artifact_context(artifacts: list[dict[str, str]], task_language: str) -> str:
         if not artifacts:
             return ""
-        parts = ["Relevant module artifacts:"]
+        if task_language == "uk":
+            parts = ["Релевантні артефакти модулів:"]
+            path_label = "Шлях"
+            content_label = "Вміст"
+        else:
+            parts = ["Relevant module artifacts:"]
+            path_label = "Path"
+            content_label = "Content"
         for artifact in artifacts:
-            parts.append(f"Path: {artifact['path']}")
-            parts.append("Content:")
+            parts.append(f"{path_label}: {artifact['path']}")
+            parts.append(f"{content_label}:")
             parts.append(artifact["content"])
         return "\n".join(parts)
 
@@ -323,6 +341,8 @@ class OrchestratorAgent(AutonomousAgent):
         raise ValueError("Planner returned malformed JSON plan.")
 
     def _plan_subtasks(self, task: str) -> list[str]:
+        task_language = self._infer_task_language(task)
+        language_name = "Ukrainian" if task_language == "uk" else "English"
         prompt = f"""
 You are the Planner sub-agent in a multi-agent coding pipeline.
 Break the task into a concise ordered JSON array of actionable coding subtasks.
@@ -340,6 +360,9 @@ Rules:
 - Never switch languages or mix languages inside the plan.
 - Respect the existing project structure and avoid changing unrelated behavior.
 - Available tools are listed for context only; do not call tools in your response.
+- Task language is {language_name}.
+- Every natural-language string in your response must be in {language_name}.
+- Do not use the other language except for file paths, code symbols, or tool names.
 
 Available tools:
 {", ".join(TOOL_REGISTRY.keys())}
@@ -362,6 +385,8 @@ Original task:
         plan: list[str],
         results: list[dict[str, Any]],
     ) -> dict[str, Any]:
+        task_language = self._infer_task_language(task)
+        language_name = "Ukrainian" if task_language == "uk" else "English"
         prompt = f"""
 You are the Reviewer sub-agent in a multi-agent coding pipeline.
 Review the original task, subtasks, and coder outputs.
@@ -388,6 +413,9 @@ Rules:
 - If the original task is in English, `summary`, `problem`, and `suggested_fix` MUST all be in English.
 - Never switch languages or mix languages inside the review output.
 - Available tools are listed for context only; do not call tools in your response.
+- Task language is {language_name}.
+- Every natural-language string in your response must be in {language_name}.
+- Do not use the other language except for file paths, code symbols, or tool names.
 
 Available tools:
 {", ".join(TOOL_REGISTRY.keys())}
@@ -424,6 +452,7 @@ Coder results:
         }
 
     def run(self, task: str) -> dict[str, Any]:
+        task_language = self._infer_task_language(task)
         try:
             plan = self._plan_subtasks(task)
             if self.on_stage is not None:
@@ -457,14 +486,23 @@ Coder results:
                 )
             relevant_artifact_paths = self._select_relevant_artifacts(subtask, module_artifact_paths)
             relevant_artifacts = self._read_artifact_contents(relevant_artifact_paths)
-            context = (
-                f"Original task: {task}\n"
-                f"Overall plan: {json.dumps(plan, ensure_ascii=False)}\n"
-                f"Current subtask index: {index}\n"
-                f"Completed subtask summaries: "
-                f"{json.dumps([item.get('summary', '') for item in subtask_results], ensure_ascii=False)}"
-            )
-            artifact_context = self._format_artifact_context(relevant_artifacts)
+            if task_language == "uk":
+                context = (
+                    f"Оригінальне завдання: {task}\n"
+                    f"Загальний план: {json.dumps(plan, ensure_ascii=False)}\n"
+                    f"Індекс поточної підзадачі: {index}\n"
+                    f"Підсумки завершених підзадач: "
+                    f"{json.dumps([item.get('summary', '') for item in subtask_results], ensure_ascii=False)}"
+                )
+            else:
+                context = (
+                    f"Original task: {task}\n"
+                    f"Overall plan: {json.dumps(plan, ensure_ascii=False)}\n"
+                    f"Current subtask index: {index}\n"
+                    f"Completed subtask summaries: "
+                    f"{json.dumps([item.get('summary', '') for item in subtask_results], ensure_ascii=False)}"
+                )
+            artifact_context = self._format_artifact_context(relevant_artifacts, task_language)
             if artifact_context:
                 context = f"{context}\n{artifact_context}"
 
@@ -504,20 +542,33 @@ Coder results:
                 if result.get("status") == "done" or attempt > self.max_subtask_retries:
                     break
 
-                retry_lines = [
-                    attempt_context,
-                    f"RETRY ATTEMPT {attempt}: Previous attempt failed.",
-                    f"Failure summary: {result.get('summary', '')}",
-                ]
+                if task_language == "uk":
+                    retry_lines = [
+                        attempt_context,
+                        f"СПРОБА ПОВТОРУ {attempt}: Попередня спроба завершилася невдачею.",
+                        f"Підсумок помилки: {result.get('summary', '')}",
+                    ]
+                else:
+                    retry_lines = [
+                        attempt_context,
+                        f"RETRY ATTEMPT {attempt}: Previous attempt failed.",
+                        f"Failure summary: {result.get('summary', '')}",
+                    ]
                 last_steps = result.get("state", {}).get("steps_history", [])[-2:]
                 if last_steps:
-                    retry_lines.append(f"Last actions: {json.dumps(last_steps, ensure_ascii=False)}")
+                    if task_language == "uk":
+                        retry_lines.append(f"Останні дії: {json.dumps(last_steps, ensure_ascii=False)}")
+                    else:
+                        retry_lines.append(f"Last actions: {json.dumps(last_steps, ensure_ascii=False)}")
                 written_paths = self._extract_written_module_paths(result)
                 if written_paths:
                     artifacts = self._read_artifact_contents(written_paths)
-                    artifact_context = self._format_artifact_context(artifacts)
+                    artifact_context = self._format_artifact_context(artifacts, task_language)
                     if artifact_context:
-                        retry_lines.append(f"Files written in failed attempt: {artifact_context}")
+                        if task_language == "uk":
+                            retry_lines.append(f"Файли, записані під час невдалої спроби: {artifact_context}")
+                        else:
+                            retry_lines.append(f"Files written in failed attempt: {artifact_context}")
                 command_steps = result.get("state", {}).get("steps_history", [])
                 last_command_output: dict[str, Any] | None = None
                 for step in reversed(command_steps):
@@ -531,11 +582,18 @@ Coder results:
                         }
                         break
                 if last_command_output is not None:
-                    retry_lines.append(
-                        "Last command output: "
-                        f"stdout={last_command_output['stdout']} "
-                        f"stderr={last_command_output['stderr']}"
-                    )
+                    if task_language == "uk":
+                        retry_lines.append(
+                            "Останній вивід команди: "
+                            f"stdout={last_command_output['stdout']} "
+                            f"stderr={last_command_output['stderr']}"
+                        )
+                    else:
+                        retry_lines.append(
+                            "Last command output: "
+                            f"stdout={last_command_output['stdout']} "
+                            f"stderr={last_command_output['stderr']}"
+                        )
                 attempt_context = "\n".join(retry_lines)
 
             if self.on_stage is not None:
@@ -590,16 +648,28 @@ Coder results:
                             "issues_count": len(filtered_issues),
                         },
                     )
-                repair_subtask = (
-                    "Fix the following issues identified by the reviewer: "
-                    f"{json.dumps(filtered_issues, ensure_ascii=False)}"
-                )
-                repair_context = (
-                    f"REPAIR CYCLE {review_cycle}\n"
-                    f"Original task: {task}\n"
-                    f"Overall plan: {json.dumps(plan, ensure_ascii=False)}\n"
-                    f"Previous subtask results: {json.dumps(subtask_results, ensure_ascii=False)}"
-                )
+                if task_language == "uk":
+                    repair_subtask = (
+                        "Виправ такі проблеми, які виявив reviewer: "
+                        f"{json.dumps(filtered_issues, ensure_ascii=False)}"
+                    )
+                    repair_context = (
+                        f"ЦИКЛ ВИПРАВЛЕННЯ {review_cycle}\n"
+                        f"Оригінальне завдання: {task}\n"
+                        f"Загальний план: {json.dumps(plan, ensure_ascii=False)}\n"
+                        f"Попередні результати підзадач: {json.dumps(subtask_results, ensure_ascii=False)}"
+                    )
+                else:
+                    repair_subtask = (
+                        "Fix the following issues identified by the reviewer: "
+                        f"{json.dumps(filtered_issues, ensure_ascii=False)}"
+                    )
+                    repair_context = (
+                        f"REPAIR CYCLE {review_cycle}\n"
+                        f"Original task: {task}\n"
+                        f"Overall plan: {json.dumps(plan, ensure_ascii=False)}\n"
+                        f"Previous subtask results: {json.dumps(subtask_results, ensure_ascii=False)}"
+                    )
 
                 if self.on_stage is not None:
                     self.on_stage(

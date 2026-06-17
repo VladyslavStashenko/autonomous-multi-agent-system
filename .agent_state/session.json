@@ -3,6 +3,6 @@
   "max_agent_steps": 30,
   "theme": "amber",
   "mode": "technical",
-  "agent_type": "single",
-  "last_used_at": "2026-06-15T23:13:25"
+  "agent_type": "multi",
+  "last_used_at": "2026-06-17T14:30:47"
 }

@@ -41,7 +41,7 @@ def format_error(error_message: str) -> str:
     return error_message[:120]
 
 
-def render_chat_step(action: str, args: dict[str, Any], result: dict[str, Any], theme: Theme) -> None:
+def render_chat_step(action: str, args: dict[str, Any], result: dict[str, Any], theme: Theme, language: str = "en") -> None:
     path = str(args.get("path") or result.get("path") or "").strip()
     command = str(args.get("command") or result.get("command") or "").strip()
     ok = bool(result.get("ok"))
@@ -81,20 +81,20 @@ def render_chat_step(action: str, args: dict[str, Any], result: dict[str, Any], 
 
     reason = str(args.get("_reason") or "").strip()
     if reason:
-        lines.append(Text(f"Why: {reason}", style=theme.ui_highlight))
+        lines.append(Text(f"{'Чому' if language == 'uk' else 'Why'}: {reason}", style=theme.ui_highlight))
 
     if action == "run_command":
         status_message = str(
             result.get("message")
             or result.get("error")
             or result.get("stderr")
-            or ("Command completed successfully." if ok else "Command failed.")
+            or ("Команду успішно виконано." if ok and language == "uk" else "Command completed successfully." if ok else "Помилка виконання команди." if language == "uk" else "Command failed.")
         ).strip()
     elif action == "read_file":
         status_message = str(
             result.get("message")
             or result.get("error")
-            or ("File read successfully." if ok else "File read failed.")
+            or ("Файл успішно прочитано." if ok and language == "uk" else "File read successfully." if ok else "Не вдалося прочитати файл." if language == "uk" else "File read failed.")
         ).strip()
     else:
         status_message = str(

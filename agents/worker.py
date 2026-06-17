@@ -1,11 +1,61 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from tools.registry import TOOL_REGISTRY
 
 
 class Worker:
+    def __init__(self) -> None:
+        self._cache: dict[str, dict[str, Any]] = {}
+
+    def _cache_key(self, action: str, step: dict[str, Any]) -> str | None:
+        if action == "read_file":
+            return f"read_file:{step.get('path', '')}"
+        if action == "list_directory":
+            return f"list_directory:{step.get('path', '.')}"
+        return None
+
+    def _invalidate_file_cache(self, path: str) -> None:
+        self._cache.pop(f"read_file:{path}", None)
+
+        parent = Path(path).parent.as_posix() if path else "."
+        if parent in {"", "."}:
+            parent = "."
+        self._cache.pop(f"list_directory:{parent}", None)
+
+    def _invalidate_directory_cache(self, path: str) -> None:
+        normalized = Path(path).as_posix() if path else "."
+        if normalized in {"", "."}:
+            normalized = "."
+
+        parent = Path(normalized).parent.as_posix()
+        if parent in {"", "."}:
+            parent = "."
+
+        self._cache.pop(f"list_directory:{normalized}", None)
+        self._cache.pop(f"list_directory:{parent}", None)
+
+        directory_prefixes = (
+            f"read_file:{normalized}/",
+            f"list_directory:{normalized}/",
+        )
+        keys_to_remove = [
+            key for key in self._cache if key.startswith(directory_prefixes)
+        ]
+        for key in keys_to_remove:
+            self._cache.pop(key, None)
+
+    def _invalidate_cache_for_step(self, action: str, step: dict[str, Any]) -> None:
+        path = str(step.get("path", "")).strip()
+        if not path:
+            return
+        if action in {"write_file", "append_file", "apply_patch"}:
+            self._invalidate_file_cache(path)
+        elif action == "delete_directory":
+            self._invalidate_directory_cache(path)
+
     def execute_step(self, step: dict[str, Any]) -> dict[str, Any]:
         action = step.get("action")
         tool = TOOL_REGISTRY.get(action)
@@ -13,14 +63,25 @@ class Worker:
             return {"ok": False, "error": f"Unknown action: {action}"}
 
         try:
+            cache_key = self._cache_key(action, step) if isinstance(action, str) else None
+            if cache_key is not None and cache_key in self._cache:
+                return {**self._cache[cache_key], "_from_cache": True}
+
             if action in {"read_file", "list_directory", "delete_directory"}:
-                return tool(step.get("path", "."))
-            if action in {"run_command", "run_interactive_command"}:
-                return tool(step.get("command", ""))
-            if action in {"write_file", "append_file", "write_docx"}:
-                return tool(step.get("path", ""), step.get("content", ""))
-            if action == "apply_patch":
-                return tool(step.get("path", ""), step.get("patches", []))
-            return {"ok": False, "error": f"Unsupported action signature: {action}"}
+                result = tool(step.get("path", "."))
+            elif action in {"run_command", "run_interactive_command"}:
+                result = tool(step.get("command", ""))
+            elif action in {"write_file", "append_file", "write_docx"}:
+                result = tool(step.get("path", ""), step.get("content", ""))
+            elif action == "apply_patch":
+                result = tool(step.get("path", ""), step.get("patches", []))
+            else:
+                return {"ok": False, "error": f"Unsupported action signature: {action}"}
+
+            if cache_key is not None and result.get("ok") is True:
+                self._cache[cache_key] = dict(result)
+
+            self._invalidate_cache_for_step(str(action), step)
+            return result
         except Exception as exc:
             return {"ok": False, "error": f"Worker execution failed for {action}: {exc}"}

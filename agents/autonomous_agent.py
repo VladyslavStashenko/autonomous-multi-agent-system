@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any
 
@@ -41,6 +42,10 @@ class AutonomousAgent:
                 )
             )
         return [types.Tool(function_declarations=declarations)]
+
+    @staticmethod
+    def _infer_task_language(text: str) -> str:
+        return "uk" if re.search(r"[А-Яа-яІіЇїЄєҐґ]", text) else "en"
 
     @staticmethod
     def _tool_description_for(name: str) -> str:
@@ -188,6 +193,7 @@ class AutonomousAgent:
         save_to_memory: bool = True,
         use_step_evaluator: bool = True,
     ) -> dict[str, Any]:
+        task_language = self._infer_task_language(task)
         state = AgentState(task=task)
         # Start each task from a clean state so step numbering always begins at 1.
         state.steps_history.clear()
@@ -211,7 +217,10 @@ class AutonomousAgent:
                     config=config,
                 )
             except Exception as exc:
-                state.finish("fail", f"Failed to get model response: {exc}")
+                if task_language == "uk":
+                    state.finish("fail", f"Не вдалося отримати відповідь моделі: {exc}")
+                else:
+                    state.finish("fail", f"Failed to get model response: {exc}")
                 state.save()
                 if save_to_memory:
                     save_memory(state)
@@ -227,18 +236,31 @@ class AutonomousAgent:
                 messages.append(candidates[0].content)
             if function_call is None:
                 if not state.steps_history:
+                    if task_language == "uk":
+                        reminder_text = (
+                            "Ти ще не виконав жодного виклику інструмента. "
+                            "Для цього завдання потрібно почати з першого кроку через tool call."
+                        )
+                    else:
+                        reminder_text = (
+                            "You have not executed any tools yet. "
+                            "Please start with the first step using a tool call."
+                        )
                     messages.append(
                         types.Content(
                             role="user",
                             parts=[
                                 types.Part.from_text(
-                                    text="You have not executed any tools yet. The task requires creating files and running code. Please start with the first step."
+                                    text=reminder_text
                                 )
                             ],
                         )
                     )
                     continue
-                summary = self._extract_text_response(response) or "Task completed."
+                if task_language == "uk":
+                    summary = self._extract_text_response(response) or "Завдання виконано."
+                else:
+                    summary = self._extract_text_response(response) or "Task completed."
                 state.finish("done", summary)
                 state.save()
                 if save_to_memory:
@@ -254,7 +276,11 @@ class AutonomousAgent:
                 "status": "continue",
                 "action": action,
                 "args": args,
-                "reason": f"Model selected native function call: {action}",
+                "reason": (
+                    f"Модель обрала вбудований виклик функції: {action}"
+                    if task_language == "uk"
+                    else f"Model selected native function call: {action}"
+                ),
                 "summary": "",
             }
             result = self.worker.execute_step(
@@ -293,12 +319,16 @@ class AutonomousAgent:
             if action == "run_command" and result.get("ok") is False:
                 stderr = str(result.get("stderr", "")).strip()
                 if stderr:
+                    if task_language == "uk":
+                        command_error_text = f"Попередня команда завершилася помилкою: {stderr}"
+                    else:
+                        command_error_text = f"Previous command failed with error: {stderr}"
                     messages.append(
                         types.Content(
                             role="user",
                             parts=[
                                 types.Part.from_text(
-                                    text=f"Previous command failed with error: {stderr}"
+                                    text=command_error_text
                                 )
                             ],
                         )
@@ -308,7 +338,10 @@ class AutonomousAgent:
             if self.on_step is not None:
                 self.on_step(step_number, decision, result)
 
-        summary = f"Stopped after reaching max_steps={self.max_steps}."
+        if task_language == "uk":
+            summary = f"Зупинено після досягнення ліміту кроків max_steps={self.max_steps}."
+        else:
+            summary = f"Stopped after reaching max_steps={self.max_steps}."
         state.finish("max_steps", summary)
         state.save()
         if save_to_memory:
