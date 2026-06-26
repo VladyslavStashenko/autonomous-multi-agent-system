@@ -5,3 +5,4 @@ colorama
 prompt_toolkit
 python-docx
 python-dotenv
+rich
