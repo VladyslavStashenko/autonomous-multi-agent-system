@@ -1,0 +1,11 @@
+.git
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.coverage
+.venv
+.agent_memory
+.agent_state
+.env
