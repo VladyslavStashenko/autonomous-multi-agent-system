@@ -183,12 +183,8 @@ class OrchestratorAgent(AutonomousAgent):
             if normalized_path in normalized_subtask or filename in normalized_subtask or module_name in normalized_subtask:
                 matches.append(path)
 
-        if matches:
-            return matches
-
-        if OrchestratorAgent._is_test_subtask(subtask):
-            return artifact_paths
-        return []
+        remaining = [path for path in artifact_paths if path not in matches]
+        return matches + remaining
 
     @staticmethod
     def _format_artifact_context(artifacts: list[dict[str, str]], task_language: str) -> str:
@@ -458,6 +454,84 @@ Coder results:
             "issues": issues,
         }
 
+    def _run_pytest_check(self) -> dict[str, Any]:
+        return self.worker.execute_step(
+            {
+                "action": "run_command",
+                "command": "python -m pytest",
+            }
+        )
+
+    def _build_pytest_repair_prompt(self, task: str, plan: list[str], subtask_results: list[dict[str, Any]], pytest_result: dict[str, Any]) -> tuple[str, str]:
+        stdout = str(pytest_result.get("stdout", "")).strip()
+        stderr = str(pytest_result.get("stderr", "")).strip()
+        details = "\n".join(part for part in [stdout, stderr] if part).strip() or str(pytest_result.get("error", "")).strip()
+        task_language = self._infer_task_language(task)
+
+        if task_language == "uk":
+            repair_subtask = (
+                "Виправ помилки, знайдені перевіркою pytest, і приведи реалізацію у відповідність до наявних модулів та тестів."
+            )
+            repair_context = (
+                "ПЕРЕДПЕРЕВІРКА PYTEST ПЕРЕД REVIEWER\n"
+                f"Оригінальне завдання: {task}\n"
+                f"Загальний план: {json.dumps(plan, ensure_ascii=False)}\n"
+                f"Поточні результати підзадач: {json.dumps(subtask_results, ensure_ascii=False)}\n"
+                f"Вивід pytest:\n{details}"
+            )
+        else:
+            repair_subtask = (
+                "Fix the failures found by the pytest verification step and align the implementation with the existing modules and tests."
+            )
+            repair_context = (
+                "PYTEST VERIFICATION BEFORE REVIEWER\n"
+                f"Original task: {task}\n"
+                f"Overall plan: {json.dumps(plan, ensure_ascii=False)}\n"
+                f"Current subtask results: {json.dumps(subtask_results, ensure_ascii=False)}\n"
+                f"Pytest output:\n{details}"
+            )
+        return repair_subtask, repair_context
+
+    def _run_repair_subtask(
+        self,
+        *,
+        task: str,
+        subtask: str,
+        context: str,
+        module_artifact_paths: list[str],
+        subtask_results: list[dict[str, Any]],
+        global_step_ref: dict[str, int],
+        global_coder_runs_ref: dict[str, int],
+    ) -> dict[str, Any]:
+        def on_repair_step(step_number: int, decision: dict[str, Any], result: dict[str, Any]) -> None:
+            global_step_ref["value"] += 1
+            if self.on_step is not None:
+                self.on_step(global_step_ref["value"], decision, result)
+
+        global_coder_runs_ref["value"] += 1
+        repair_coder = _CoderAgent(
+            pool=self.pool,
+            model=self.coder_model,
+            worker=self.worker,
+            evaluator=self.evaluator,
+            subtask_context=context,
+            max_steps=self.max_steps,
+            on_step=on_repair_step,
+        )
+        repair_result = repair_coder.run(subtask)
+        for module_path in self._extract_written_module_paths(repair_result):
+            if module_path not in module_artifact_paths:
+                module_artifact_paths.append(module_path)
+        subtask_results.append(
+            {
+                "subtask": subtask,
+                "status": repair_result.get("status", "fail"),
+                "summary": repair_result.get("summary", ""),
+                "state": repair_result.get("state", {}),
+            }
+        )
+        return repair_result
+
     def run(self, task: str) -> dict[str, Any]:
         task_language = self._infer_task_language(task)
         try:
@@ -476,8 +550,8 @@ Coder results:
 
         subtask_results: list[dict[str, Any]] = []
         module_artifact_paths: list[str] = []
-        global_step = 0
-        global_coder_runs = 0
+        global_step_ref = {"value": 0}
+        global_coder_runs_ref = {"value": 0}
         total_retries_used = 0
         review_cycle = 0
 
@@ -514,10 +588,9 @@ Coder results:
                 context = f"{context}\n{artifact_context}"
 
             def on_subtask_step(step_number: int, decision: dict[str, Any], result: dict[str, Any]) -> None:
-                nonlocal global_step
-                global_step += 1
+                global_step_ref["value"] += 1
                 if self.on_step is not None:
-                    self.on_step(global_step, decision, result)
+                    self.on_step(global_step_ref["value"], decision, result)
 
             attempt_context = context
             result: dict[str, Any] = {}
@@ -535,7 +608,7 @@ Coder results:
                         )
                     total_retries_used += 1
 
-                global_coder_runs += 1
+                global_coder_runs_ref["value"] += 1
                 coder = _CoderAgent(
                     pool=self.pool,
                     model=self.coder_model,
@@ -639,6 +712,36 @@ Coder results:
                     "subtasks": subtask_results,
                 }
 
+        pytest_result = self._run_pytest_check()
+        if not pytest_result.get("ok"):
+            repair_subtask, repair_context = self._build_pytest_repair_prompt(task, plan, subtask_results, pytest_result)
+            if self.on_stage is not None:
+                self.on_stage(
+                    "repair_start",
+                    {
+                        "cycle": 0,
+                        "subtask": repair_subtask,
+                    },
+                )
+            repair_result = self._run_repair_subtask(
+                task=task,
+                subtask=repair_subtask,
+                context=repair_context,
+                module_artifact_paths=module_artifact_paths,
+                subtask_results=subtask_results,
+                global_step_ref=global_step_ref,
+                global_coder_runs_ref=global_coder_runs_ref,
+            )
+            if self.on_stage is not None:
+                self.on_stage(
+                    "repair_done",
+                    {
+                        "cycle": 0,
+                        "summary": repair_result.get("summary"),
+                    },
+                )
+            pytest_result = self._run_pytest_check()
+
         try:
             review = self._review_results(task, plan, subtask_results)
             if self.on_stage is not None:
@@ -688,33 +791,14 @@ Coder results:
                         },
                     )
 
-                def on_repair_step(step_number: int, decision: dict[str, Any], result: dict[str, Any]) -> None:
-                    nonlocal global_step
-                    global_step += 1
-                    if self.on_step is not None:
-                        self.on_step(global_step, decision, result)
-
-                global_coder_runs += 1
-                repair_coder = _CoderAgent(
-                    pool=self.pool,
-                    model=self.coder_model,
-                    worker=self.worker,
-                    evaluator=self.evaluator,
-                    subtask_context=repair_context,
-                    max_steps=self.max_steps,
-                    on_step=on_repair_step,
-                )
-                repair_result = repair_coder.run(repair_subtask)
-                for module_path in self._extract_written_module_paths(repair_result):
-                    if module_path not in module_artifact_paths:
-                        module_artifact_paths.append(module_path)
-                subtask_results.append(
-                    {
-                        "subtask": repair_subtask,
-                        "status": repair_result.get("status", "fail"),
-                        "summary": repair_result.get("summary", ""),
-                        "state": repair_result.get("state", {}),
-                    }
+                repair_result = self._run_repair_subtask(
+                    task=task,
+                    subtask=repair_subtask,
+                    context=repair_context,
+                    module_artifact_paths=module_artifact_paths,
+                    subtask_results=subtask_results,
+                    global_step_ref=global_step_ref,
+                    global_coder_runs_ref=global_coder_runs_ref,
                 )
 
                 if self.on_stage is not None:
@@ -755,7 +839,7 @@ Coder results:
                 {
                     "status": final_status,
                     "total_subtasks": len(plan),
-                    "total_coder_runs": global_coder_runs,
+                    "total_coder_runs": global_coder_runs_ref["value"],
                     "review_cycles": review_cycle,
                     "retries_used": total_retries_used,
                 },

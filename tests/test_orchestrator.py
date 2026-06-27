@@ -173,3 +173,57 @@ def test_review_results_normalizes_redundant_summary(
 
     assert result["status"] == "SUCCESS"
     assert result["summary"] == "Updated files."
+
+
+def test_select_relevant_artifacts_returns_all_previous_python_artifacts_with_matches_first(
+    base_orchestrator: OrchestratorAgent,
+) -> None:
+    result = base_orchestrator._select_relevant_artifacts(
+        "Update game.py to use logic helpers",
+        ["logic.py", "game.py", "board.py"],
+    )
+
+    assert result == ["logic.py", "game.py", "board.py"]
+
+
+def test_orchestrator_runs_pytest_before_reviewer_and_repairs_failures(
+    base_orchestrator: OrchestratorAgent,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(base_orchestrator, "_plan_subtasks", lambda task: ["Step 1"])
+
+    coder_runs: list[str] = []
+
+    def fake_coder_run(self, subtask: str):
+        coder_runs.append(subtask)
+        return {"status": "done", "summary": f"done {subtask}", "state": {"steps_history": []}}
+
+    monkeypatch.setattr(orchestrator_module._CoderAgent, "run", fake_coder_run)
+
+    command_results = iter(
+        [
+            {"ok": False, "stdout": "1 failed", "stderr": ""},
+            {"ok": True, "stdout": "all passed", "stderr": ""},
+        ]
+    )
+
+    def fake_execute_step(step: dict) -> dict:
+        if step["action"] == "run_command":
+            assert step["command"] == "python -m pytest"
+            return next(command_results)
+        if step["action"] == "read_file":
+            return {"ok": True, "content": "artifact"}
+        return {"ok": True}
+
+    base_orchestrator.worker.execute_step.side_effect = fake_execute_step
+    monkeypatch.setattr(
+        base_orchestrator,
+        "_review_results",
+        lambda task, plan, results: {"status": "SUCCESS", "summary": "all good", "issues": []},
+    )
+
+    result = base_orchestrator.run("Count lines")
+
+    assert result["status"] == "done"
+    assert len(coder_runs) == 2
+    assert "Fix the failures found by the pytest verification step" in coder_runs[1]
