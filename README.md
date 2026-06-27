@@ -191,7 +191,7 @@ Important mode behavior:
 | `/theme` | Show or change terminal theme |
 | `exit` | Close the program |
 
-![Theme selection menu](docs/screenshots/theme-menu.png)
+![Theme selection menu](docs/screenshots/theme.png)
 
 ## Configuration
 
@@ -237,11 +237,9 @@ The repository includes tests for routing, storage, memory, CLI command handling
 
 ## Demo Materials
 
-```markdown
 ![Startup screen](docs/screenshots/startup.png)
 ![Single-agent run](docs/screenshots/single-agent.png)
-![Multi-agent run](docs/demos/quick-demo-multi.png)
-```
+![Multi-agent run](docs/demos/quick-demo-multi.gif)
 
 ## Limitations
 
