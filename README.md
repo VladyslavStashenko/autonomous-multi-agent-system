@@ -2,7 +2,7 @@
 
 JEDIS is an autonomous CLI coding agent powered by Google Gemini. It can inspect files, edit project code, run commands, and work through a task with minimal step-by-step guidance. The project supports a single-agent flow for straightforward tasks and a multi-agent flow for broader or multi-file work.
 
-> [PLACEHOLDER: Insert a short 10-20 second demo GIF of the startup screen and one task run here]
+![JEDIS quick demo](docs/demos/quick-demo-multi.gif)
 
 ## Table of Contents
 
@@ -54,8 +54,6 @@ main.py
 ```
 
 The entry point is [main.py](D:/NU_LP/2_sem/ПКР/console-agent%20v.3.0/agent/main.py:1). Runtime state is persisted in SQLite under `.agent_memory/agent.db`, while session preferences are stored in `.agent_state/session.json`.
-
-> [PLACEHOLDER: Insert an architecture diagram screenshot or exported schema image here]
 
 ## Project Structure
 
@@ -149,7 +147,7 @@ Notes:
 - `.agent_memory` and `.agent_state` are mounted as volumes so local state survives container restarts.
 - Docker is optional for this project. Local `venv` execution is also a perfectly valid way to run it.
 
-> [PLACEHOLDER: Insert a terminal screenshot of `docker compose run --rm agent` working successfully]
+![Docker run](docs/screenshots/docker-run.png)
 
 ## Usage
 
@@ -193,7 +191,7 @@ Important mode behavior:
 | `/theme` | Show or change terminal theme |
 | `exit` | Close the program |
 
-> [PLACEHOLDER: Insert screenshot of `/theme` or `/config model` selection menu here]
+![Theme selection menu](docs/screenshots/theme-menu.png)
 
 ## Configuration
 
@@ -239,34 +237,10 @@ The repository includes tests for routing, storage, memory, CLI command handling
 
 ## Demo Materials
 
-Suggested assets to add:
-
-1. Startup screen screenshot.
-2. Single-agent task execution screenshot.
-3. Multi-agent planner/coder/reviewer screenshot.
-4. Docker run screenshot.
-5. Optional short GIF showing one complete task from prompt to result.
-
-Recommended folder layout:
-
-```text
-docs/
-  screenshots/
-    startup.png
-    single-agent.png
-    multi-agent.png
-    docker-run.png
-  demos/
-    quick-demo.gif
-```
-
-Suggested embed block:
-
 ```markdown
 ![Startup screen](docs/screenshots/startup.png)
 ![Single-agent run](docs/screenshots/single-agent.png)
-![Multi-agent run](docs/screenshots/multi-agent.png)
-![Docker run](docs/screenshots/docker-run.png)
+![Multi-agent run](docs/demos/quick-demo-multi.png)
 ```
 
 ## Limitations
